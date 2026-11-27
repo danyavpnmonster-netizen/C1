@@ -111,6 +111,15 @@ export class Peds {
     this.scare(p.pos, 25);
   }
 
+  shot(p, dx, dz) {
+    if (p.state === 'dead' || p.state === 'flying') return;
+    p.state = 'flying';
+    p.facing = Math.atan2(-dx, -dz);
+    p.vel.set(dx * 3, 2.5, dz * 3);
+    p.pos.y = 0.3;
+    if (Math.random() < 0.5) this.game.spawnCash(p.pos.x, p.pos.z, randInt(10, 50));
+  }
+
   punch(p, from) {
     if (p.state === 'dead' || p.state === 'flying') return;
     p.state = 'down'; p.timer = 2.5;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeHuman, animateHuman } from './human.js';
+import { makeHuman, animateHuman, mat } from './human.js';
 import { lerpAngle } from './config.js';
 
 export class Player {
@@ -13,6 +13,24 @@ export class Player {
     this.car = null; this.lastCar = null;
     this.punchT = 0; this.punchCd = 0;
     this.knock = new THREE.Vector3();
+    this.weapon = 'fists'; this.ammo = 0; this.shotCd = 0;
+    // пистолет в правой руке
+    this.gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.34), mat(0x1b1b1b));
+    this.gun.position.set(0, -0.62, 0.12);
+    this.gun.visible = false;
+    this.mesh.userData.aR.add(this.gun);
+  }
+
+  setWeapon(w) {
+    if (w === 'pistol' && this.ammo <= 0) { this.game.hud.message('Нет патронов', 1.2); return; }
+    this.weapon = w;
+    this.gun.visible = w === 'pistol';
+  }
+
+  addAmmo(n) {
+    const first = this.ammo <= 0;
+    this.ammo += n;
+    if (first) this.setWeapon('pistol');
   }
 
   hurt(v) {
@@ -74,9 +92,27 @@ export class Player {
         }
       }
     }
+    // смена оружия
+    if (playing) {
+      if (inp.pressed('Digit1')) this.setWeapon('fists');
+      if (inp.pressed('Digit2')) this.setWeapon('pistol');
+      if (inp.pressed('KeyQ')) this.setWeapon(this.weapon === 'fists' ? 'pistol' : 'fists');
+    }
+    const attack = playing && (inp.clicked || inp.pressed('KeyE'));
+    // выстрел
+    this.shotCd -= dt;
+    if (attack && this.weapon === 'pistol') {
+      if (this.shotCd <= 0) {
+        this.shotCd = 0.28;
+        this.facing = g.camYaw;
+        this.ammo--;
+        g.shoot(this.pos.x, this.pos.y + 1.45, this.pos.z, Math.sin(g.camYaw), Math.cos(g.camYaw));
+        if (this.ammo <= 0) { this.ammo = 0; this.setWeapon('fists'); }
+      }
+    }
     // удар
     this.punchCd -= dt;
-    if (playing && (inp.clicked || inp.pressed('KeyE')) && this.punchCd <= 0) {
+    if (attack && this.weapon === 'fists' && this.punchCd <= 0) {
       this.punchCd = 0.45; this.punchT = 0.3;
       g.sfx.punch();
       const ffx = Math.sin(this.facing), ffz = Math.cos(this.facing);
@@ -94,6 +130,6 @@ export class Player {
     this.punchT = Math.max(0, this.punchT - dt);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.facing;
-    animateHuman(this.mesh, this.phase, moving, this.punchT / 0.3);
+    animateHuman(this.mesh, this.phase, moving, this.weapon === 'pistol' ? 1 : this.punchT / 0.3);
   }
 }

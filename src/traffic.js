@@ -104,7 +104,7 @@ export class Traffic {
     const g = this.game, P = g.playerPos();
     for (let k = g.cars.length - 1; k >= 0; k--) {
       const c = g.cars[k];
-      if (c === g.player.car) continue;
+      if (c === g.player.car || c.keep) continue;
       const d = Math.hypot(c.pos.x - P.x, c.pos.z - P.z);
       const lim = c === g.player.lastCar ? 320 : c.role === 'police' ? 260 : 190;
       if (d > lim) g.removeCar(c);

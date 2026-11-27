@@ -11,8 +11,9 @@ export class Hud {
       money: $('money'), stars: $('stars'), hp: $('hpfill'), armor: $('hpbar'), clock: $('clock'),
       mission: $('mission'), timer: $('timer'), msg: $('msg'), big: $('big'), speed: $('speed'),
       arrow: $('arrow'), arrowWrap: $('arrowWrap'), dist: $('dist'), car: $('carname'), hit: $('hitflash'),
-      bust: $('bust'),
+      bust: $('bust'), weapon: $('weapon'),
     };
+    this.bigMap = $('bigmap'); this.bigCtx = this.bigMap.getContext('2d'); this.mapOpen = false;
     this.map = $('minimap');
     this.ctx = this.map.getContext('2d');
     this.base = this.renderBase();
@@ -45,6 +46,44 @@ export class Hud {
   big(text, t = 3) { this.el.big.textContent = text; this.bigT = t; this.el.big.style.opacity = 1; }
   hitFlash() { this.hitT = 0.25; }
 
+  toggleMap() {
+    this.mapOpen = !this.mapOpen;
+    this.bigMap.style.display = this.mapOpen ? 'block' : 'none';
+  }
+
+  drawBigMap() {
+    const g = this.g, cv = this.bigMap, c = this.bigCtx;
+    const size = Math.min(innerWidth, innerHeight) * 0.9;
+    const px = Math.round(size * Math.min(devicePixelRatio, 2));
+    if (cv.width !== px) { cv.width = cv.height = px; cv.style.width = cv.style.height = size + 'px'; }
+    const k = px / this.base.width;
+    c.drawImage(this.base, 0, 0, px, px);
+    const at = (x, z) => { const [u, v] = this.toBase(x, z); return [u * k, v * k]; };
+    const icon = (x, z, col, txt) => {
+      const [u, v] = at(x, z), r = px * 0.018;
+      c.fillStyle = col; c.fillRect(u - r, v - r, r * 2, r * 2);
+      c.fillStyle = '#000'; c.font = `bold ${r * 1.4}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(txt, u, v + 1);
+    };
+    const sp = g.city.sprayPos; if (sp) icon(sp.x, sp.z, '#3dff8a', '$');
+    icon(g.hospital.x, g.hospital.z, '#ff6b6b', 'H');
+    icon(g.station.x, g.station.z, '#7aa7ff', 'П');
+    if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) icon(gv.pos.x, gv.pos.z, '#' + gv.color.toString(16).padStart(6, '0'), gv.name[0]);
+    for (const car of g.cars) if (car.role === 'police' && !car.wrecked) {
+      const [u, v] = at(car.pos.x, car.pos.z); c.fillStyle = '#ff3030'; c.beginPath(); c.arc(u, v, px * 0.008, 0, 7); c.fill();
+    }
+    const T = g.missions.target;
+    if (T) { const [u, v] = at(T.x, T.z); c.fillStyle = '#ffdd33'; c.strokeStyle = '#000'; c.lineWidth = 3; c.beginPath(); c.arc(u, v, px * 0.014, 0, 7); c.fill(); c.stroke(); }
+    const P = g.playerPos(), [u, v] = at(P.x, P.z), h = g.player.car ? g.player.car.heading : g.player.facing, r = px * 0.02;
+    c.save(); c.translate(u, v); c.rotate(-h);
+    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, -r); c.lineTo(r * 0.75, r * 0.75); c.lineTo(0, r * 0.4); c.lineTo(-r * 0.75, r * 0.75); c.closePath(); c.fill(); c.stroke();
+    c.restore();
+    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, px - px * 0.06, px, px * 0.06);
+    c.fillStyle = '#fff'; c.font = `${px * 0.028}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('Карта Sunrise Bay — M, чтобы закрыть', px / 2, px - px * 0.03);
+  }
+
   update(dt) {
     const g = this.g, p = g.player, el = this.el;
     // деньги
@@ -57,12 +96,15 @@ export class Hud {
     for (let i = 1; i <= 5; i++) s += `<span class="${i <= g.wanted ? (flashing ? 'st dim' : 'st on') : 'st'}">★</span>`;
     if (el.stars._v !== s) { el.stars.innerHTML = s; el.stars._v = s; }
     el.hp.style.width = p.health + '%';
+    const wtxt = p.weapon === 'pistol' ? `🔫 ${p.ammo}` : (p.ammo > 0 ? `👊 <small>(🔫 ${p.ammo})</small>` : '👊');
+    if (el.weapon._v !== wtxt) { el.weapon.innerHTML = wtxt; el.weapon._v = wtxt; }
     const h = Math.floor(g.hour) % 24, m = Math.floor((g.hour % 1) * 60);
     el.clock.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
     // машина
     if (p.car) {
       el.speed.style.display = 'block';
-      el.speed.innerHTML = `${Math.round(Math.abs(p.car.speed) * 3.6)}<small> км/ч</small><div class="carhp"><i style="width:${p.car.health}%"></i></div>`;
+      el.speed.innerHTML = `${Math.round(Math.abs(p.car.speed) * 3.6)}<small> км/ч</small><div class="carhp"><i style="width:${p.car.health}%"></i></div>`
+        + `<div class="carhp nitro"><i style="width:${p.car.nitro * 100}%"></i></div>`;
       el.car.textContent = p.car.T.name;
     } else { el.speed.style.display = 'none'; el.car.textContent = ''; }
     // миссия
@@ -89,6 +131,7 @@ export class Hud {
     el.bust.style.width = Math.min(100, g.police.bustT / 2.2 * 100) + '%';
     el.bust.parentElement.style.display = g.police.bustT > 0.05 ? 'block' : 'none';
     this.drawMap();
+    if (this.mapOpen) this.drawBigMap();
   }
 
   drawMap() {

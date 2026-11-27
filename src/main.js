@@ -197,10 +197,15 @@ class Game {
     this.hpMat = new THREE.MeshLambertMaterial({ color: 0xff3030, emissive: 0xaa0000, emissiveIntensity: 0.6 });
     for (let k = 0; k < 30; k++) { const s = this.city.randomSidewalk(); this.spawnCash(s.x, s.z, randInt(20, 120), true); }
     for (let k = 0; k < 8; k++) { const s = this.city.randomSidewalk(); this.addPickup('hp', s.x, s.z, 50, true); }
+    this.ammoGeo = new THREE.BoxGeometry(0.6, 0.4, 0.6);
+    this.ammoMat = new THREE.MeshLambertMaterial({ color: 0x3a7bff, emissive: 0x1a3a99, emissiveIntensity: 0.7 });
+    for (let k = 0; k < 10; k++) { const s = this.city.randomSidewalk(); this.addPickup('ammo', s.x, s.z, 24, true); }
+    const sp = this.spawnPoint; this.addPickup('ammo', sp.x, sp.z - 12, 24, true);
   }
 
   addPickup(kind, x, z, value, respawn) {
-    const m = new THREE.Mesh(kind === 'hp' ? this.hpGeo : this.cashGeo, kind === 'hp' ? this.hpMat : this.cashMat);
+    const m = kind === 'hp' ? new THREE.Mesh(this.hpGeo, this.hpMat)
+      : kind === 'ammo' ? new THREE.Mesh(this.ammoGeo, this.ammoMat) : new THREE.Mesh(this.cashGeo, this.cashMat);
     m.position.set(x, 1, z);
     this.scene.add(m);
     this.pickups.push({ kind, x, z, value, respawn, mesh: m, t: 0, life: respawn ? Infinity : 30 });
@@ -227,6 +232,7 @@ class Game {
       if (near && pk.kind === 'hp' && this.player.health >= 100) continue;
       if (near) {
         if (pk.kind === 'cash') { this.addMoney(pk.value); this.hud.message(`+$${pk.value}`, 1.2); this.sfx.cash(); }
+        else if (pk.kind === 'ammo') { this.player.addAmmo(pk.value); this.hud.message(`Пистолет +${pk.value} патронов (Q — сменить)`, 2); this.sfx.check(); }
         else { this.player.health = Math.min(100, this.player.health + pk.value); this.hud.message('+здоровье', 1.2); this.sfx.ok(); }
       }
       if (near || pk.life <= 0) {
@@ -300,6 +306,41 @@ class Game {
     }
   }
 
+  // Пуля: ищем первую цель по лучу, стены останавливают выстрел.
+  shoot(x, y, z, dx, dz, range = 70) {
+    this.sfx.shot();
+    let best = null, kind = null, bt = range;
+    for (const p of this.peds.list) {
+      if (p.state !== 'walk' && p.state !== 'flee' && p.state !== 'down') continue;
+      const rx = p.pos.x - x, rz = p.pos.z - z, t = rx * dx + rz * dz;
+      if (t < 0.3 || t > bt) continue;
+      if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = p; kind = 'ped'; }
+    }
+    for (const c of this.cars) {
+      if (c === this.player.car) continue;
+      const rx = c.pos.x - x, rz = c.pos.z - z, t = rx * dx + rz * dz;
+      if (t < 0.3 || t > bt) continue;
+      if (Math.abs(rx * dz - rz * dx) < c.T.l * 0.4) { bt = t; best = c; kind = 'car'; }
+    }
+    for (let s = 1; s < bt; s += 0.8) {
+      if (this.city.pointBlocked(x + dx * s, y, z + dz * s)) { bt = s; best = null; break; }
+    }
+    // трассер
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x + dx * 0.8, y, z + dz * 0.8), new THREE.Vector3(x + dx * bt, y, z + dz * bt)]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffee88, transparent: true }));
+    this.scene.add(line);
+    this.fx.push({ mesh: line, t: 0, dur: 0.08, line: true });
+    if (kind === 'ped') { this.peds.shot(best, dx, dz); this.crime(3); }
+    else if (kind === 'car') {
+      best.damage(14);
+      this.sfx.hit(0.2);
+      this.crime(best.role === 'police' ? 3 : 0.5);
+    }
+    this.peds.scare({ x, z }, 30);
+    if (this.police.nearest < 60) this.crime(1);
+  }
+
   explode(car) {
     car.exploded = true;
     this.sfx.boom();
@@ -324,7 +365,8 @@ class Game {
   // ---------- игрок в машине ----------
   playerCarControl() {
     const a = this.input.axis();
-    return { throttle: a.y, steer: a.x, handbrake: this.input.down('Space') ? 1 : 0 };
+    const boost = this.input.down('ShiftLeft') || this.input.down('ShiftRight') || this.input.down('KeyN');
+    return { throttle: a.y, steer: a.x, handbrake: this.input.down('Space') ? 1 : 0, boost };
   }
 
   sprayCheck(dt) {
@@ -399,11 +441,11 @@ class Game {
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; }
+      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; this.player.ammo = s.ammo | 0; }
     } catch (e) { /* хранилище недоступно */ }
   }
   save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour })); } catch (e) { /* нет */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo })); } catch (e) { /* нет */ }
   }
 
   // ---------- главный цикл ----------
@@ -423,6 +465,7 @@ class Game {
     if (this.state === 'play') {
       if (inp.pressed('KeyF')) this.toggleCar();
       if (inp.pressed('Escape') && document.pointerLockElement) document.exitPointerLock();
+      if (inp.pressed('KeyM')) this.hud.toggleMap();
     } else {
       this.stateT -= dt;
       if (this.stateT <= 0) this.respawn();
@@ -450,7 +493,7 @@ class Game {
     this.sprayCheck(dt);
     for (let k = this.fx.length - 1; k >= 0; k--) {
       const f = this.fx[k]; f.t += dt;
-      const s = 1 + f.t / f.dur * 7; f.mesh.scale.setScalar(s);
+      if (!f.line) f.mesh.scale.setScalar(1 + f.t / f.dur * 7);
       f.mesh.material.opacity = 0.9 * (1 - f.t / f.dur);
       if (f.t >= f.dur) { this.scene.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); this.fx.splice(k, 1); }
     }

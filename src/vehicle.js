@@ -42,6 +42,7 @@ export class Car {
     this.vy = 0; this.airborne = false; this.pitch = 0;
     this.health = 100; this.wrecked = false; this.wreckT = 0; this.exploded = false;
     this.role = 'parked'; this.ai = null; this.lastImpact = 0;
+    this.nitro = 1; this.boosting = false; this.keep = false;
 
     const g = this.mesh = new THREE.Group();
     g.rotation.order = 'YXZ';
@@ -82,6 +83,9 @@ export class Car {
     // огонь при поломке
     this.fire = add(CAR_MATS.fire, 0.8, 0.5, 0.8, 0, baseY + T.bh + 0.3, T.l / 2 - 0.7);
     this.fire.visible = false;
+    // пламя нитро из выхлопа
+    this.flame = add(CAR_MATS.fire, 0.25, 0.25, 0.9, -(T.w / 2 - 0.45), baseY + 0.15, -T.l / 2 - 0.45);
+    this.flame.visible = false;
     scene.add(g);
   }
 
@@ -107,10 +111,15 @@ export class Car {
     if (this.wrecked) { c = { throttle: 0, steer: 0, handbrake: 1 }; this.wreckT += dt; }
     this.steer += (c.steer - this.steer) * Math.min(1, dt * 8);
     let s = this.speed;
+    const boost = !!c.boost && this.nitro > 0.02 && c.throttle > 0 && !this.wrecked;
+    this.boosting = boost;
+    if (boost) this.nitro = Math.max(0, this.nitro - dt * 0.35);
+    else this.nitro = Math.min(1, this.nitro + dt * 0.06);
+    const accel = T.accel * (boost ? 2.4 : 1), vmax = T.max * (boost ? 1.3 : 1);
     if (!this.airborne) {
       if (c.throttle > 0) {
         if (s < -0.5) s += 24 * dt * c.throttle;
-        else s += T.accel * c.throttle * dt * Math.max(0.05, 1 - s / T.max);
+        else s += accel * c.throttle * dt * Math.max(boost ? 0.3 : 0.05, 1 - s / vmax);
       } else if (c.throttle < 0) {
         if (s > 0.5) s -= 24 * dt * -c.throttle;
         else s -= T.accel * 0.6 * -c.throttle * dt * Math.max(0, 1 + s / 11);
@@ -176,6 +185,8 @@ export class Car {
     this.mesh.rotation.x = -this.pitch;
     for (const w of this.wheels) w.rotation.x += s * dt / 0.38;
     for (const p of this.frontPivots) p.rotation.y = -this.steer * 0.5;
+    this.flame.visible = boost;
+    if (boost) this.flame.scale.z = 0.7 + Math.random() * 0.6;
     if (this.fire.visible) {
       const f = 0.8 + Math.random() * 0.6;
       this.fire.scale.set(f, 0.5 * f * 1.4, f);
