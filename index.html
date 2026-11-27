@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sunrise Bay</title>
+<style>
+  :root { --hud: #fff; --accent: #ffcc33; --panel: rgba(0,0,0,0.45); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a1028; font-family: "Trebuchet MS", system-ui, sans-serif; color: var(--hud); user-select: none; -webkit-user-select: none; touch-action: none; }
+  #game { display: block; width: 100vw; height: 100vh; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 3px #000, 0 0 2px #000; }
+  #topright { top: 14px; right: 16px; text-align: right; }
+  #clock { font-size: 26px; font-weight: bold; }
+  #money { font-size: 30px; font-weight: bold; color: #7dff7d; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+  #stars { font-size: 28px; letter-spacing: 2px; }
+  .st { color: rgba(0,0,0,0.45); -webkit-text-stroke: 1px #ddd; }
+  .st.on { color: #fff; } .st.dim { color: #888; }
+  #hpbar { width: 160px; height: 10px; background: rgba(0,0,0,0.6); border: 2px solid #000; margin: 6px 0 0 auto; }
+  #hpfill { height: 100%; width: 100%; background: linear-gradient(#ff6b6b, #c0392b); transition: width .2s; }
+  #minimap { position: fixed; left: 16px; bottom: 16px; width: 190px; height: 190px; pointer-events: none; }
+  #speed { bottom: 22px; right: 22px; font-size: 38px; font-weight: bold; display: none; text-align: right; }
+  #speed small { font-size: 16px; }
+  .carhp { width: 120px; height: 6px; background: rgba(0,0,0,.6); margin-left: auto; }
+  .carhp i { display: block; height: 100%; background: #f5b041; }
+  #carname { bottom: 86px; right: 22px; font-size: 16px; opacity: .85; }
+  #mission { top: 14px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 6px 14px; border-radius: 6px; font-size: 18px; display: none; max-width: 70vw; text-align: center; }
+  #timer { top: 52px; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: bold; }
+  #arrowWrap { top: 92px; left: 50%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; }
+  #arrow { width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 30px solid var(--accent); filter: drop-shadow(0 2px 2px #000); }
+  #dist { font-size: 14px; margin-top: 2px; }
+  #msg { bottom: 230px; left: 50%; transform: translateX(-50%); font-size: 22px; transition: opacity .4s; opacity: 0; text-align: center; white-space: nowrap; }
+  #big { top: 34%; left: 50%; transform: translateX(-50%); font-size: 54px; font-weight: 900; color: var(--accent); white-space: pre; text-align: center; opacity: 0; transition: opacity .5s; letter-spacing: 2px; -webkit-text-stroke: 2px #000; }
+  #hitflash { inset: 0; background: #ff0000; opacity: 0; transition: opacity .15s; }
+  #bustwrap { top: 40%; left: 50%; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(0,0,0,.6); display: none; border: 2px solid #000; }
+  #bust { height: 100%; width: 0; background: #3a7bff; }
+  #help { top: 14px; left: 16px; font-size: 12px; line-height: 1.5; opacity: .8; }
+  body.touch #help { display: none; }
+
+  #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10,16,40,.55), rgba(10,16,40,.92)); cursor: pointer; z-index: 10; padding: 16px; }
+  #start .card { max-width: 560px; text-align: center; }
+  #start h1 { font-size: clamp(40px, 9vw, 76px); margin: 0; color: var(--accent); letter-spacing: 4px; -webkit-text-stroke: 2px #000; text-shadow: 0 6px 0 #c0392b, 0 10px 20px #000; font-style: italic; }
+  #start p { opacity: .9; line-height: 1.5; }
+  #start .go { display: inline-block; margin-top: 14px; padding: 12px 28px; border: 3px solid var(--accent); border-radius: 8px; font-size: 22px; font-weight: bold; animation: pulse 1.4s infinite; }
+  #start table { margin: 12px auto 0; font-size: 14px; text-align: left; border-spacing: 12px 3px; }
+  #start td:first-child { color: var(--accent); font-weight: bold; white-space: nowrap; }
+  body.touch #start table { display: none; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+
+  #touch { display: none; }
+  body.touch #touch { display: block; }
+  #joy { position: fixed; left: 24px; bottom: 24px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.35); z-index: 5; }
+  #knob { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.5); }
+  .tbtn { position: fixed; width: 66px; height: 66px; border-radius: 50%; background: rgba(0,0,0,.4); border: 2px solid rgba(255,255,255,.5); color: #fff; font-size: 15px; font-weight: bold; display: flex; align-items: center; justify-content: center; z-index: 5; }
+  .tbtn.on { background: rgba(255,204,51,.6); }
+  body.touch #speed { right: auto; left: 50%; transform: translateX(-50%); bottom: 10px; text-align: center; font-size: 30px; }
+  body.touch .carhp { margin: 0 auto; }
+  body.touch #carname { display: none; }
+  body.touch #minimap { top: 12px; left: 12px; bottom: auto; width: 120px; height: 120px; }
+  body.touch #msg { bottom: 110px; font-size: 18px; }
+  @media (max-width: 600px) { #minimap { width: 140px; height: 140px; } #big { font-size: 34px; } #money { font-size: 22px; } #clock { font-size: 18px; } #stars { font-size: 20px; } #hpbar { width: 110px; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hitflash" class="hud"></div>
+<div id="topright" class="hud">
+  <div id="clock">09:00</div>
+  <div id="money">$00000000</div>
+  <div id="hpbar"><div id="hpfill"></div></div>
+  <div id="stars"></div>
+</div>
+<div id="help" class="hud">
+  WASD — ходьба / руль · Shift — бег · Пробел — прыжок / ручник<br>
+  F — сесть/выйти · ЛКМ или E — удар · H — сигнал · мышь — камера
+</div>
+<canvas id="minimap" width="190" height="190"></canvas>
+<div id="mission" class="hud"></div>
+<div id="timer" class="hud"></div>
+<div id="arrowWrap" class="hud"><div id="arrow"></div><div id="dist"></div></div>
+<div id="msg" class="hud"></div>
+<div id="big" class="hud"></div>
+<div id="bustwrap" class="hud"><div id="bust"></div></div>
+<div id="speed" class="hud"></div>
+<div id="carname" class="hud"></div>
+
+<div id="touch">
+  <div id="joy"><div id="knob"></div></div>
+  <div class="tbtn" data-code="KeyF" style="right:20px;bottom:96px">F</div>
+  <div class="tbtn" data-code="KeyE" style="right:96px;bottom:20px">Удар</div>
+  <div class="tbtn" data-code="Space" style="right:20px;bottom:20px">⤒</div>
+  <div class="tbtn" data-code="ShiftLeft" style="right:172px;bottom:20px">Бег</div>
+  <div class="tbtn" data-code="KeyH" style="right:96px;bottom:96px">♪</div>
+</div>
+
+<div id="start">
+  <div class="card">
+    <h1>SUNRISE BAY</h1>
+    <p>Открытый город у океана. Угоняйте машины, выполняйте задания, уходите от полиции и прыгайте с трамплинов в парках.</p>
+    <table>
+      <tr><td>W A S D</td><td>движение / газ, тормоз, руль</td></tr>
+      <tr><td>Мышь</td><td>камера (клик — захват курсора)</td></tr>
+      <tr><td>F</td><td>сесть в машину / выйти (угон)</td></tr>
+      <tr><td>Пробел</td><td>прыжок / ручной тормоз</td></tr>
+      <tr><td>ЛКМ, E</td><td>удар</td></tr>
+      <tr><td>Shift / H</td><td>бег / сигнал</td></tr>
+    </table>
+    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка,
+      <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
+    <div class="go">ИГРАТЬ</div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
