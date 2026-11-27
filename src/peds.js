@@ -17,7 +17,7 @@ const CROSS = {
 class Ped {
   constructor(scene) {
     const l = randomLook();
-    this.mesh = makeHuman(l.shirt, l.pants, l.skin, l.hair);
+    this.mesh = makeHuman(l.shirt, l.pants, l.skin, l.hair, l.opts);
     scene.add(this.mesh);
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();

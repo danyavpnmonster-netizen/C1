@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeHuman, animateHuman, mat } from './human.js';
+import { makeHuman, animateHuman, mat, recolorHuman } from './human.js';
 import { lerpAngle } from './config.js';
 
 export class Player {
@@ -15,10 +15,10 @@ export class Player {
     this.knock = new THREE.Vector3();
     this.weapon = 'fists'; this.ammo = 0; this.shotCd = 0;
     // пистолет в правой руке
-    this.gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.34), mat(0x1b1b1b));
-    this.gun.position.set(0, -0.62, 0.12);
+    this.gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.12), mat(0x1b1b1b));
+    this.gun.position.set(0, -0.38, 0.03);
     this.gun.visible = false;
-    this.mesh.userData.aR.add(this.gun);
+    this.mesh.userData.eR.add(this.gun);
   }
 
   setWeapon(w) {
@@ -37,9 +37,7 @@ export class Player {
 
   setOutfit(shirt, pants) {
     this.outfit = [shirt, pants];
-    const ch = this.mesh.children, u = this.mesh.userData;
-    u.lL.material = u.lR.material = mat(pants);
-    ch[2].material = u.aL.material = u.aR.material = mat(shirt);
+    recolorHuman(this.mesh, shirt, pants);
   }
 
   hurt(v) {

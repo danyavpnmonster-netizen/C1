@@ -8,13 +8,14 @@ const GANG_COLOR = 0x1f9e4a;
 
 class Member {
   constructor(scene, home) {
-    this.mesh = makeHuman(GANG_COLOR, 0x151515, [0x8d5524, 0xc68642, 0x6b4226][randInt(0, 2)], 0x111111);
-    const band = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.07, 0.31), mat(GANG_COLOR));
-    band.position.y = 1.79;
-    this.mesh.add(band);
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.34), mat(0x1b1b1b));
-    gun.position.set(0, -0.62, 0.12);
-    this.mesh.userData.aR.add(gun);
+    this.mesh = makeHuman(GANG_COLOR, 0x151515, [0x8d5524, 0xc68642, 0x6b4226][randInt(0, 2)], 0x111111,
+      { build: rnd(1.0, 1.15), height: rnd(0.97, 1.06), shoe: 0xf0f0f0 });
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.055, 0.265), mat(GANG_COLOR));
+    band.position.y = 1.735;
+    this.mesh.userData.body.add(band);
+    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.12), mat(0x1b1b1b));
+    gun.position.set(0, -0.38, 0.03);
+    this.mesh.userData.eR.add(gun);
     scene.add(this.mesh);
     this.home = home;
     this.pos = new THREE.Vector3(home.x, 0, home.z);

@@ -75,7 +75,7 @@ export class Missions {
         { pos: B, text: 'Отвези пассажира', r: 6, stop: true },
       ] };
       const l = randomLook();
-      this.passenger = makeHuman(l.shirt, l.pants, l.skin, l.hair);
+      this.passenger = makeHuman(l.shirt, l.pants, l.skin, l.hair, l.opts);
       this.passenger.position.set(A.x, 0, A.z);
       g.scene.add(this.passenger);
     } else if (giver.type === 'steal') {

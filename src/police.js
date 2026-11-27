@@ -6,17 +6,18 @@ import { makeHuman, animateHuman, mat } from './human.js';
 
 const WANT_CARS = [0, 1, 2, 3, 4, 6];
 const PARK = { throttle: 0, steer: 0, handbrake: 1 };
-const CAP = new THREE.BoxGeometry(0.32, 0.1, 0.32), BRIM = new THREE.BoxGeometry(0.32, 0.04, 0.16);
-const GUN = new THREE.BoxGeometry(0.1, 0.16, 0.34);
+const CAP = new THREE.CylinderGeometry(0.13, 0.13, 0.09, 10), BRIM = new THREE.BoxGeometry(0.22, 0.025, 0.12);
+const GUN = new THREE.BoxGeometry(0.07, 0.3, 0.12);
 
 // Полицейский пешком.
 class Officer {
   constructor(scene, car, x, z) {
-    this.mesh = makeHuman(0x1d2f5a, 0x12182a, [0xf1c27d, 0xc68642, 0x8d5524, 0xe0ac69][randInt(0, 3)], 0x1a1209);
-    const cap = new THREE.Mesh(CAP, mat(0x111a33)); cap.position.y = 1.86;
-    const brim = new THREE.Mesh(BRIM, mat(0x111a33)); brim.position.set(0, 1.82, 0.2);
-    const gun = new THREE.Mesh(GUN, mat(0x111111)); gun.position.set(0, -0.62, 0.12);
-    this.mesh.add(cap, brim); this.mesh.userData.aR.add(gun);
+    this.mesh = makeHuman(0x1d2f5a, 0x12182a, [0xf1c27d, 0xc68642, 0x8d5524, 0xe0ac69][randInt(0, 3)], 0x1a1209,
+      { sleeves: 'long', female: Math.random() < 0.25, height: rnd(0.97, 1.05) });
+    const cap = new THREE.Mesh(CAP, mat(0x111a33)); cap.position.y = 1.79;
+    const brim = new THREE.Mesh(BRIM, mat(0x111a33)); brim.position.set(0, 1.755, 0.15);
+    const gun = new THREE.Mesh(GUN, mat(0x111111)); gun.position.set(0, -0.38, 0.03);
+    this.mesh.userData.body.add(cap, brim); this.mesh.userData.eR.add(gun);
     scene.add(this.mesh);
     this.car = car;
     this.pos = new THREE.Vector3(x, 0, z);
