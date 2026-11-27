@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { clamp, pick } from './config.js';
+import { buildCarModel } from './carmodel.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const WHEEL = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 12).rotateZ(Math.PI / 2);
 
 export const CAR_MATS = {
   glass: new THREE.MeshLambertMaterial({ color: 0x1f2a36 }),
@@ -13,6 +13,7 @@ export const CAR_MATS = {
   blue: new THREE.MeshLambertMaterial({ color: 0x0000aa, emissive: 0x2255ff, emissiveIntensity: 0.1 }),
   white: new THREE.MeshLambertMaterial({ color: 0xf4f4f4 }),
   black: new THREE.MeshLambertMaterial({ color: 0x111111 }),
+  trim: new THREE.MeshLambertMaterial({ color: 0x1b1d20 }),
   fire: new THREE.MeshBasicMaterial({ color: 0xff7a1a }),
   driver: new THREE.MeshLambertMaterial({ color: 0xd9a066 }),
 };
@@ -80,42 +81,18 @@ export class Car {
 
     const g = this.mesh = new THREE.Group();
     g.rotation.order = 'YXZ';
-    this.bodyMat = new THREE.MeshLambertMaterial({ color: color ?? pick(T.colors) });
+    this.bodyMat = new THREE.MeshPhongMaterial({ color: color ?? pick(T.colors), specular: 0x555555, shininess: 70 });
     const add = (mat, sx, sy, sz, x, y, z, parent = g) => {
       const m = new THREE.Mesh(BOX, mat);
       m.scale.set(sx, sy, sz); m.position.set(x, y, z);
       m.castShadow = true; parent.add(m); return m;
     };
     const baseY = 0.42;
-    add(this.bodyMat, T.w, T.bh, T.l, 0, baseY + T.bh / 2, 0);
-    const [cw, ch, cl, cz] = T.cab;
-    const cabMat = type === 'van' ? this.bodyMat : CAR_MATS.glass;
-    add(cabMat, cw, ch, cl, 0, baseY + T.bh + ch / 2, cz);
-    if (type === 'van') add(CAR_MATS.glass, cw + 0.02, ch * 0.5, 0.6, 0, baseY + T.bh + ch * 0.55, cz + cl / 2 - 0.2);
-    if (type === 'police') {
-      add(CAR_MATS.white, T.w + 0.02, T.bh * 0.5, 1.6, 0, baseY + T.bh * 0.55, 0.1);
-      add(CAR_MATS.red, 0.6, 0.18, 0.3, 0.35, baseY + T.bh + ch + 0.09, cz);
-      add(CAR_MATS.blue, 0.6, 0.18, 0.3, -0.35, baseY + T.bh + ch + 0.09, cz);
-    }
-    if (type === 'taxi') add(CAR_MATS.white, 0.8, 0.25, 0.3, 0, baseY + T.bh + ch + 0.12, cz);
-    // фары
-    for (const sx of [-1, 1]) {
-      add(CAR_MATS.head, 0.42, 0.18, 0.06, sx * (T.w / 2 - 0.35), baseY + T.bh * 0.6, T.l / 2 + 0.01);
-      add(CAR_MATS.tail, 0.42, 0.16, 0.06, sx * (T.w / 2 - 0.35), baseY + T.bh * 0.6, -T.l / 2 - 0.01);
-    }
-    // водитель (левый руль: левая сторона — +x локально)
-    this.driverMesh = add(CAR_MATS.driver, 0.32, 0.36, 0.32, 0.42, baseY + T.bh + 0.25, cz + 0.2);
-    this.driverMesh.visible = false;
-    // колёса
-    this.wheels = []; this.frontPivots = [];
-    const wx = T.w / 2 - 0.08, wz = T.l / 2 - 0.9;
-    for (const [x, z, front] of [[wx, wz, 1], [-wx, wz, 1], [wx, -wz, 0], [-wx, -wz, 0]]) {
-      const pivot = new THREE.Group(); pivot.position.set(x, 0.38, z); g.add(pivot);
-      const w = new THREE.Mesh(WHEEL, CAR_MATS.wheel); w.castShadow = true; pivot.add(w);
-      this.wheels.push(w); if (front) this.frontPivots.push(pivot);
-    }
+    const parts = buildCarModel(g, T, type, this.bodyMat, CAR_MATS);
+    this.wheels = parts.wheels; this.frontPivots = parts.frontPivots;
+    this.driverMesh = parts.driver;
     // огонь при поломке
-    this.fire = add(CAR_MATS.fire, 0.8, 0.5, 0.8, 0, baseY + T.bh + 0.3, T.l / 2 - 0.7);
+    this.fire = add(CAR_MATS.fire, 0.8, 0.5, 0.8, 0, T.bh + 0.55, T.l / 2 - 0.9);
     this.fire.visible = false;
     // пламя нитро из выхлопа
     this.flame = add(CAR_MATS.fire, 0.25, 0.25, 0.9, -(T.w / 2 - 0.45), baseY + 0.15, -T.l / 2 - 0.45);
