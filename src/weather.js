@@ -25,6 +25,7 @@ export class Weather {
   }
 
   setRain(on) {
+    if ((on ? 1 : 0) === this.target) return;
     this.target = on ? 1 : 0;
     this.game.hud.message(on ? 'Начался дождь' : 'Дождь закончился', 2);
   }
