@@ -104,7 +104,7 @@ export class Player {
       }
     }
     // смена оружия
-    if (playing && !g.shops.panelOpen) {
+    if (playing && !g.shops.panelOpen && !g.test.on) {
       if (inp.pressed('Digit1')) this.setWeapon('fists');
       if (inp.pressed('Digit2')) this.setWeapon('pistol');
       if (inp.pressed('KeyQ')) this.setWeapon(this.weapon === 'fists' ? 'pistol' : 'fists');

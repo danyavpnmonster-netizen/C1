@@ -14,6 +14,7 @@ import { Gangs } from './gangs.js';
 import { Weather } from './weather.js';
 import { Shops } from './shops.js';
 import { Skids } from './skids.js';
+import { TestMode } from './testmode.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -70,6 +71,7 @@ class Game {
     this.missions = new Missions(this);
     this.shops = new Shops(this);
     this.skids = new Skids(this.scene);
+    this.test = new TestMode(this);
     this.hud = new Hud(this);
     for (let k = 0; k < 16; k++) this.traffic.spawn(25, 170);
     this.initPickups();
@@ -80,18 +82,20 @@ class Game {
     this.fpsT = 0; this.fpsN = 0;
     addEventListener('resize', () => this.resize());
     this.resize();
-    document.getElementById('start').addEventListener('click', () => this.begin());
+    document.getElementById('play').addEventListener('click', (e) => { e.stopPropagation(); this.begin(false); });
+    document.getElementById('testbtn').addEventListener('click', (e) => { e.stopPropagation(); this.begin(true); });
     this.last = performance.now();
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
-  begin() {
+  begin(test) {
     document.getElementById('start').style.display = 'none';
     this.sfx.init();
     if (!this.input.isTouch) this.renderer.domElement.requestPointerLock?.();
     if (this.state === 'menu') {
       this.state = 'play';
-      this.hud.message('Подойдите к машине и нажмите F', 5);
+      if (test) this.test.enable();
+      else this.hud.message('Подойдите к машине и нажмите F', 5);
     }
   }
 
@@ -151,7 +155,7 @@ class Game {
   addMoney(v) { this.player.money = Math.max(0, this.player.money + v); }
 
   crime(points) {
-    if (points <= 0 || this.state !== 'play') return;
+    if (points <= 0 || this.state !== 'play' || this.test.on) return;
     this.heat += points;
     let w = 0;
     while (w < 5 && this.heat >= HEAT[w + 1]) w++;
@@ -544,6 +548,7 @@ class Game {
     } catch (e) { /* хранилище недоступно */ }
   }
   save() {
+    if (this.test.on) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo, armor: this.player.armor, stats: this.stats, outfit: this.player.outfit })); } catch (e) { /* нет */ }
   }
 
@@ -602,6 +607,7 @@ class Game {
     }
     this.updateDayNight(dt);
     this.updateCamera(dt);
+    this.test.update(dt);
     this.hud.update(dt);
     const c = p.car;
     const sirenLvl = this.wanted > 0 ? clamp(1 - this.police.nearest / 120, 0, 1) : 0;

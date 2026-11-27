@@ -55,7 +55,26 @@
   #start .card { max-width: 560px; text-align: center; }
   #start h1 { font-size: clamp(40px, 9vw, 76px); margin: 0; color: var(--accent); letter-spacing: 4px; -webkit-text-stroke: 2px #000; text-shadow: 0 6px 0 #c0392b, 0 10px 20px #000; font-style: italic; }
   #start p { opacity: .9; line-height: 1.5; }
-  #start .go { display: inline-block; margin-top: 14px; padding: 12px 28px; border: 3px solid var(--accent); border-radius: 8px; font-size: 22px; font-weight: bold; animation: pulse 1.4s infinite; }
+  #start { cursor: default; }
+  #start .gos { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  #start .go { display: inline-flex; flex-direction: column; align-items: center; padding: 12px 28px; border: 3px solid var(--accent); border-radius: 8px; font: bold 22px "Trebuchet MS", system-ui, sans-serif; color: #fff; background: rgba(0,0,0,.35); cursor: pointer; }
+  #start .go:not(.test) { animation: pulse 1.4s infinite; }
+  #start .go.test { border-color: #4fc3ff; }
+  #start .go small { font-size: 12px; font-weight: normal; opacity: .8; }
+  #start .go:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  #testpanel { position: fixed; top: 60px; left: 16px; display: none; z-index: 6; max-width: calc(100vw - 32px); }
+  #tele { margin: 0; padding: 8px 10px; background: rgba(5,10,24,.78); border: 1px solid #4fc3ff; border-radius: 8px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre; color: #dff4ff; pointer-events: none; }
+  #testbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-width: 360px; }
+  #testbtns button { padding: 6px 9px; background: rgba(5,10,24,.78); border: 1px solid #4fc3ff; border-radius: 6px; color: #fff; font: 13px "Trebuchet MS", system-ui, sans-serif; cursor: pointer; }
+  #testbtns button small { margin-left: 5px; color: #4fc3ff; font-size: 11px; }
+  #testbtns button:active { background: rgba(79,195,255,.35); }
+  body.testmode #help { display: none; }
+  body.touch #testpanel { top: 8px; left: 142px; right: 250px; max-width: none; }
+  body.touch #tele { font-size: 9px; line-height: 1.3; columns: 2; column-gap: 14px; padding: 5px 8px; }
+  body.touch #testbtns { max-width: none; gap: 4px; margin-top: 5px; }
+  body.touch #testbtns button { padding: 4px 6px; font-size: 11px; }
+  body.touch #testbtns button small { display: none; }
+  @media (max-width: 700px) { body.touch #testpanel { left: 8px; right: 8px; top: 150px; } }
   #start table { margin: 12px auto 0; font-size: 14px; text-align: left; border-spacing: 12px 3px; }
   #start td:first-child { color: var(--accent); font-weight: bold; white-space: nowrap; }
   body.touch #start table { display: none; }
@@ -97,6 +116,7 @@
 <canvas id="minimap" width="190" height="190"></canvas>
 <canvas id="bigmap"></canvas>
 <div id="shop"></div>
+<div id="testpanel"><pre id="tele"></pre><div id="testbtns"></div></div>
 <div id="mission" class="hud"></div>
 <div id="timer" class="hud"></div>
 <div id="arrowWrap" class="hud"><div id="arrow"></div><div id="dist"></div></div>
@@ -134,7 +154,10 @@
     </table>
     <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!), жёлтые кольца у дверей — входы в магазины,
       <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
-    <div class="go">ИГРАТЬ</div>
+    <div class="gos">
+      <button id="play" class="go">ИГРАТЬ</button>
+      <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
+    </div>
   </div>
 </div>
 
