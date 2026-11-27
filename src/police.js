@@ -35,6 +35,13 @@ export class Police {
   }
 
   // Высадка двух полицейских из машины рядом с игроком.
+  // Есть ли прямой проезд/обзор между точками (без зданий).
+  clearPath(a, b) {
+    const city = this.game.city, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+    for (let s = 2; s < d; s += 2) if (city.pointBlocked(a.x + dx / d * s, 1, a.z + dz / d * s)) return false;
+    return true;
+  }
+
   deploy(car) {
     const g = this.game, lx = Math.cos(car.heading), lz = -Math.sin(car.heading);
     for (const side of [1, -1]) {
@@ -172,7 +179,8 @@ export class Police {
     if (g.state === 'play' && !g.shops.inside && (!pc0 || Math.abs(pc0.speed) < 4)) {
       for (const c of cops) {
         if (c.wrecked || c.copsOut || c.deployCd > 0) continue;
-        if (Math.abs(c.speed) < 2.5 && Math.hypot(c.pos.x - P.x, c.pos.z - P.z) < 22) this.deploy(c);
+        const dd = Math.hypot(c.pos.x - P.x, c.pos.z - P.z);
+        if (Math.abs(c.speed) < 2.5 && (dd < 22 || (c.ai?.waiting && dd < 60))) this.deploy(c);
       }
     }
     for (const c of cops) c.deployCd = Math.max(0, (c.deployCd || 0) - dt);
@@ -193,11 +201,17 @@ export class Police {
     }
     this.nearest = nd;
 
-    // потеря преследования
-    if (nd > 75) {
+    // потеря преследования: никто из полиции не видит игрока вблизи
+    this.seenT = (this.seenT || 0) - dt;
+    if (this.seenT <= 0) {
+      this.seenT = 0.3;
+      this.seen = cops.some((c) => !c.wrecked && Math.hypot(c.pos.x - P.x, c.pos.z - P.z) < 75 && this.clearPath(c.pos, P))
+        || this.officers.some((o) => o.state === 'chase' && Math.hypot(o.pos.x - P.x, o.pos.z - P.z) < 40);
+    }
+    if (!this.seen) {
       this.lostT += dt;
       if (this.lostT > 8 + g.wanted * 2) { g.setWanted(g.wanted - 1); this.lostT = 0; }
-    } else this.lostT = 0;
+    } else this.lostT = Math.min(this.lostT, 0);
 
     // арест
     const pc = g.player.car;
@@ -229,26 +243,48 @@ export class Police {
     const ai = car.ai || (car.ai = {});
     const d = Math.hypot(P.x - car.pos.x, P.z - car.pos.z);
     let ax, az;
-    if (d < 45) {
+    // напрямую — только если между машиной и игроком нет зданий
+    ai.losT = (ai.losT || 0) - dt;
+    if (ai.losT <= 0) { ai.los = d < 45 && this.clearPath(car.pos, P); ai.losT = 0.25; }
+    ai.waiting = false;
+    if (ai.los) {
       ax = P.x + (pc ? Math.sin(pc.heading) * pc.speed * 0.4 : 0);
       az = P.z + (pc ? Math.cos(pc.heading) * pc.speed * 0.4 : 0);
     } else {
       // едем по перекрёсткам к игроку
-      if (!ai.chase) ai.chase = nearestNode(car.pos);
+      if (!ai.chase) ai.chase = ai.to || nearestNode(car.pos);   // начинаем с перекрёстка впереди
       let T = nodeXZ(ai.chase);
       if (Math.hypot(T.x - car.pos.x, T.z - car.pos.z) < 10) {
-        let best = ai.chase, bd = Infinity;
+        // соседний перекрёсток — только если он заметно ближе к игроку
+        let best = ai.chase, bd = Math.hypot(T.x - P.x, T.z - P.z) - 1;
         for (const n of neighbors(ai.chase)) {
           const q = nodeXZ(n), dd = Math.hypot(q.x - P.x, q.z - P.z);
           if (dd < bd) { bd = dd; best = n; }
         }
+        ai.atBest = best === ai.chase;   // ближе к игроку по дорогам не подъехать
         ai.chase = best; T = nodeXZ(best);
       }
       ax = T.x; az = T.z;
+      // игрок за домами рядом: встаём у перекрёстка, дальше полицейские пойдут пешком
+      if (ai.atBest && Math.hypot(T.x - car.pos.x, T.z - car.pos.z) < 12 && d < 60) ai.waiting = true;
+    }
+    // после застревания сначала выезжаем на середину ближайшего перекрёстка
+    ai.recoverT = Math.max(0, (ai.recoverT || 0) - dt);
+    if (ai.recoverT > 0) {
+      const R = nodeXZ(ai.recoverNode);
+      if (Math.hypot(R.x - car.pos.x, R.z - car.pos.z) < 6) ai.recoverT = 0;
+      else { ax = R.x; az = R.z; ai.waiting = false; }
     }
     const desired = Math.atan2(ax - car.pos.x, az - car.pos.z);
     const diff = wrapAngle(desired - car.heading);
-    let target = d < 45 ? clamp(d * 0.9, 0, 32) + (pc ? Math.max(0, pc.speed) * 0.5 : 0) : 30;
+    let target = ai.los ? clamp(d * 0.9, 0, 32) + (pc ? Math.max(0, pc.speed) * 0.5 : 0) : 30;
+    // перед перекрёстком тормозим, чтобы вписаться в поворот
+    if (!ai.los) {
+      const dn = Math.hypot(ax - car.pos.x, az - car.pos.z);
+      if (dn < 30) target = Math.min(target, 8 + dn * 0.35);
+    }
+    if (ai.recoverT > 0) target = Math.min(target, 8);
+    if (ai.waiting) target = 0;
     if (d < 6) target = Math.min(target, pc ? Math.abs(pc.speed) + 1 : 0);
     if (Math.abs(diff) > 0.6 && car.speed > 12) target = 10;
 
@@ -258,7 +294,10 @@ export class Police {
     }
     if (Math.abs(car.speed) < 1.2 && target > 3) {
       ai.stuckT = (ai.stuckT || 0) + dt;
-      if (ai.stuckT > 1.3) { ai.stuckT = 0; ai.revT = 1.3; }
+      if (ai.stuckT > 1.3) {
+        ai.stuckT = 0; ai.revT = 1.3;
+        ai.recoverNode = nearestNode(car.pos); ai.recoverT = 6;
+      }
     } else ai.stuckT = 0;
 
     let throttle = clamp((target - car.speed) * 0.5, -1, 1);

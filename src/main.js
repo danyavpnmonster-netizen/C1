@@ -159,7 +159,7 @@ class Game {
     this.heat += points;
     let w = 0;
     while (w < 5 && this.heat >= HEAT[w + 1]) w++;
-    if (w > this.wanted) { this.wanted = w; this.police.lostT = 0; }
+    if (w > this.wanted) { this.wanted = w; this.police.lostT = Math.min(this.police.lostT, -12); }   // 12 с полиции на подъезд
   }
 
   setWanted(w) {

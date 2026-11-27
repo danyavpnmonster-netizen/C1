@@ -51,7 +51,7 @@
   #help { top: 14px; left: 16px; font-size: 12px; line-height: 1.5; opacity: .8; }
   body.touch #help { display: none; }
 
-  #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10,16,40,.55), rgba(10,16,40,.92)); cursor: pointer; z-index: 10; padding: 16px; }
+  #start { position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center; overflow-y: auto; touch-action: pan-y; background: radial-gradient(ellipse at center, rgba(10,16,40,.55), rgba(10,16,40,.92)); cursor: pointer; z-index: 10; padding: 16px; }
   #start .card { max-width: 560px; text-align: center; }
   #start h1 { font-size: clamp(40px, 9vw, 76px); margin: 0; color: var(--accent); letter-spacing: 4px; -webkit-text-stroke: 2px #000; text-shadow: 0 6px 0 #c0392b, 0 10px 20px #000; font-style: italic; }
   #start p { opacity: .9; line-height: 1.5; }
