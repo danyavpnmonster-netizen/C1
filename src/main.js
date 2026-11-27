@@ -10,6 +10,8 @@ import { Police } from './police.js';
 import { Missions } from './missions.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
+import { Gangs } from './gangs.js';
+import { Weather } from './weather.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -39,6 +41,7 @@ class Game {
     this.wanted = 0; this.heat = 0; this.stateT = 0;
     this.camYaw = 0; this.camPitch = 0.3; this.lastLook = -10;
     this.cars = []; this.pickups = []; this.fx = [];
+    this.stats = { missions: 0, gang: 0 };
 
     this.city = new City(this.scene);
     this.input = new Input(canvas);
@@ -58,6 +61,8 @@ class Game {
     start.role = 'parked';
 
     this.peds = new Peds(this);
+    this.gangs = new Gangs(this);
+    this.weather = new Weather(this);
     this.traffic = new Traffic(this);
     this.police = new Police(this);
     this.missions = new Missions(this);
@@ -66,6 +71,9 @@ class Game {
     this.initPickups();
     this.load();
 
+    this.quality = this.input.isTouch ? 1 : 2;
+    this.applyQuality();
+    this.fpsT = 0; this.fpsN = 0;
     addEventListener('resize', () => this.resize());
     this.resize();
     document.getElementById('start').addEventListener('click', () => this.begin());
@@ -80,6 +88,31 @@ class Game {
     if (this.state === 'menu') {
       this.state = 'play';
       this.hud.message('Подойдите к машине и нажмите F', 5);
+    }
+  }
+
+  // 2 — высокое, 1 — среднее, 0 — низкое (без теней)
+  applyQuality() {
+    const q = this.quality;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, [0.75, 1, 1.5][q]));
+    const size = q === 2 ? 2048 : 1024;
+    if (this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
+    }
+    this.scene.fog.far = [320, 450, 560][q];
+    this.traffic.max = [14, 18, 22][q];
+    this.resize?.();
+  }
+
+  checkPerformance(dt) {
+    this.fpsT += dt; this.fpsN++;
+    if (this.fpsT < 3) return;
+    const fps = this.fpsN / this.fpsT;
+    this.fpsT = 0; this.fpsN = 0;
+    if (fps < 28 && this.quality > 0) {
+      this.quality--; this.applyQuality();
+      this.hud.message('Графика понижена для плавности', 2);
     }
   }
 
@@ -150,6 +183,7 @@ class Game {
     this.player.pos.set(p.x, 0, p.z);
     this.player.health = 100; this.player.vy = 0; this.player.knock.set(0, 0, 0);
     this.setWanted(0);
+    this.gangs.alert = 0;
     for (const c of this.cars.slice()) if (c.role === 'police') this.removeCar(c);
     this.state = 'play';
     this.hud.message(dead ? `Больница: −$${fine}` : `Штраф: −$${fine}`, 3);
@@ -200,12 +234,17 @@ class Game {
     this.ammoGeo = new THREE.BoxGeometry(0.6, 0.4, 0.6);
     this.ammoMat = new THREE.MeshLambertMaterial({ color: 0x3a7bff, emissive: 0x1a3a99, emissiveIntensity: 0.7 });
     for (let k = 0; k < 10; k++) { const s = this.city.randomSidewalk(); this.addPickup('ammo', s.x, s.z, 24, true); }
+    this.armorGeo = new THREE.BoxGeometry(0.7, 0.8, 0.3);
+    this.armorMat = new THREE.MeshLambertMaterial({ color: 0x8fa6c4, emissive: 0x2a4a7a, emissiveIntensity: 0.7 });
+    for (let k = 0; k < 5; k++) { const s = this.city.randomSidewalk(); this.addPickup('armor', s.x, s.z, 50, true); }
+    const pd = this.station; this.addPickup('armor', pd.x, pd.z + 6, 50, true);
     const sp = this.spawnPoint; this.addPickup('ammo', sp.x, sp.z - 12, 24, true);
   }
 
   addPickup(kind, x, z, value, respawn) {
     const m = kind === 'hp' ? new THREE.Mesh(this.hpGeo, this.hpMat)
-      : kind === 'ammo' ? new THREE.Mesh(this.ammoGeo, this.ammoMat) : new THREE.Mesh(this.cashGeo, this.cashMat);
+      : kind === 'ammo' ? new THREE.Mesh(this.ammoGeo, this.ammoMat)
+      : kind === 'armor' ? new THREE.Mesh(this.armorGeo, this.armorMat) : new THREE.Mesh(this.cashGeo, this.cashMat);
     m.position.set(x, 1, z);
     this.scene.add(m);
     this.pickups.push({ kind, x, z, value, respawn, mesh: m, t: 0, life: respawn ? Infinity : 30 });
@@ -230,8 +269,10 @@ class Game {
       pk.mesh.position.y = 1 + Math.sin(this.time * 3 + k) * 0.15;
       const near = this.state === 'play' && Math.hypot(pk.x - P.x, pk.z - P.z) < r;
       if (near && pk.kind === 'hp' && this.player.health >= 100) continue;
+      if (near && pk.kind === 'armor' && this.player.armor >= 100) continue;
       if (near) {
         if (pk.kind === 'cash') { this.addMoney(pk.value); this.hud.message(`+$${pk.value}`, 1.2); this.sfx.cash(); }
+        else if (pk.kind === 'armor') { this.player.armor = Math.min(100, this.player.armor + pk.value); this.hud.message('+бронежилет', 1.2); this.sfx.ok(); }
         else if (pk.kind === 'ammo') { this.player.addAmmo(pk.value); this.hud.message(`Пистолет +${pk.value} патронов (Q — сменить)`, 2); this.sfx.check(); }
         else { this.player.health = Math.min(100, this.player.health + pk.value); this.hud.message('+здоровье', 1.2); this.sfx.ok(); }
       }
@@ -316,6 +357,12 @@ class Game {
       if (t < 0.3 || t > bt) continue;
       if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = p; kind = 'ped'; }
     }
+    for (const m of this.gangs.list) {
+      if (m.state !== 'idle' && m.state !== 'fight') continue;
+      const rx = m.pos.x - x, rz = m.pos.z - z, t = rx * dx + rz * dz;
+      if (t < 0.3 || t > bt) continue;
+      if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = m; kind = 'gang'; }
+    }
     for (const c of this.cars) {
       if (c === this.player.car) continue;
       const rx = c.pos.x - x, rz = c.pos.z - z, t = rx * dx + rz * dz;
@@ -323,15 +370,11 @@ class Game {
       if (Math.abs(rx * dz - rz * dx) < c.T.l * 0.4) { bt = t; best = c; kind = 'car'; }
     }
     for (let s = 1; s < bt; s += 0.8) {
-      if (this.city.pointBlocked(x + dx * s, y, z + dz * s)) { bt = s; best = null; break; }
+      if (this.city.pointBlocked(x + dx * s, y, z + dz * s)) { bt = s; best = null; kind = null; break; }
     }
-    // трассер
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(x + dx * 0.8, y, z + dz * 0.8), new THREE.Vector3(x + dx * bt, y, z + dz * bt)]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffee88, transparent: true }));
-    this.scene.add(line);
-    this.fx.push({ mesh: line, t: 0, dur: 0.08, line: true });
+    this.tracer(x + dx * 0.8, y, z + dz * 0.8, x + dx * bt, z + dz * bt);
     if (kind === 'ped') { this.peds.shot(best, dx, dz); this.crime(3); }
+    else if (kind === 'gang') { this.gangs.hit(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'car') {
       best.damage(14);
       this.sfx.hit(0.2);
@@ -339,6 +382,13 @@ class Game {
     }
     this.peds.scare({ x, z }, 30);
     if (this.police.nearest < 60) this.crime(1);
+  }
+
+  tracer(x1, y, z1, x2, z2) {
+    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x1, y, z1), new THREE.Vector3(x2, y, z2)]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffee88, transparent: true }));
+    this.scene.add(line);
+    this.fx.push({ mesh: line, t: 0, dur: 0.08, line: true });
   }
 
   explode(car) {
@@ -396,12 +446,16 @@ class Game {
     this.sun.position.set(P.x + dir.x * 200, dir.y * 200, P.z + dir.z * 200);
     this.sun.target.position.set(P.x, 0, P.z);
     this.sun.intensity = 2.4 * day;
-    this.sun.castShadow = day > 0.15;
+    this.sun.castShadow = day > 0.15 && this.quality > 0;
     this.hemi.intensity = 0.25 + day * 0.85;
     const night = new THREE.Color(0x0a1028), dayC = new THREE.Color(0x87b8e8), dusk = new THREE.Color(0xf09a5a);
     const sky = night.clone().lerp(dayC, day);
     const duskAmt = clamp(1 - Math.abs(sunY) * 4, 0, 1) * 0.55;
     sky.lerp(dusk, duskAmt);
+    const rain = this.weather.amount;
+    sky.lerp(new THREE.Color(0x5a6470).multiplyScalar(0.3 + day * 0.7), rain * 0.7);
+    this.sun.intensity *= 1 - rain * 0.7;
+    this.scene.fog.near = 140 - rain * 100;
     this.scene.background.copy(sky);
     this.scene.fog.color.copy(sky);
     this.sun.color.setHex(0xfff1d6).lerp(dusk, duskAmt);
@@ -441,19 +495,19 @@ class Game {
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; this.player.ammo = s.ammo | 0; }
+      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; this.player.ammo = s.ammo | 0; this.player.armor = s.armor | 0; Object.assign(this.stats, s.stats || {}); }
     } catch (e) { /* хранилище недоступно */ }
   }
   save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo })); } catch (e) { /* нет */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo, armor: this.player.armor, stats: this.stats })); } catch (e) { /* нет */ }
   }
 
   // ---------- главный цикл ----------
   frame() {
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.last) / 1000);
+    const raw = (now - this.last) / 1000, dt = Math.min(0.05, raw);
     this.last = now;
-    if (this.state !== 'menu') this.update(dt);
+    if (this.state !== 'menu') { this.update(dt); this.checkPerformance(raw); }
     else { this.time += dt; this.camYaw += dt * 0.1; this.updateDayNight(0); this.updateCamera(dt); }
     this.renderer.render(this.scene, this.camera);
     this.input.endFrame();
@@ -486,6 +540,8 @@ class Game {
     }
     this.carCollisions();
     this.peds.update(dt);
+    this.gangs.update(dt);
+    this.weather.update(dt);
     this.traffic.update(dt);
     this.police.update(dt);
     this.missions.update(dt);

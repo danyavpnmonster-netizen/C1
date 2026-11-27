@@ -26,6 +26,11 @@ export class Sfx {
       this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      // шум дождя — зацикленный отфильтрованный шум
+      const rs = ctx.createBufferSource(); rs.buffer = this.noiseBuf; rs.loop = true;
+      const rf = ctx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1200;
+      this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
+      rs.connect(rf).connect(this.rainGain).connect(this.master); rs.start();
     } catch (e) { this.ctx = null; }
   }
 
@@ -55,6 +60,11 @@ export class Sfx {
     o.type = type; o.frequency.value = freq;
     g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g).connect(this.master); o.start(t0); o.stop(t0 + dur);
+  }
+
+  rain(level) {
+    if (!this.ctx) return;
+    this.rainGain.gain.setTargetAtTime(level * 0.08, this.ctx.currentTime, 0.5);
   }
 
   hit(v = 0.5) { this.noise(0.18, Math.min(1, v), 700); }

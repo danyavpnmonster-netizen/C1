@@ -11,7 +11,7 @@ export class Hud {
       money: $('money'), stars: $('stars'), hp: $('hpfill'), armor: $('hpbar'), clock: $('clock'),
       mission: $('mission'), timer: $('timer'), msg: $('msg'), big: $('big'), speed: $('speed'),
       arrow: $('arrow'), arrowWrap: $('arrowWrap'), dist: $('dist'), car: $('carname'), hit: $('hitflash'),
-      bust: $('bust'), weapon: $('weapon'),
+      bust: $('bust'), weapon: $('weapon'), armor: $('armorfill'),
     };
     this.bigMap = $('bigmap'); this.bigCtx = this.bigMap.getContext('2d'); this.mapOpen = false;
     this.map = $('minimap');
@@ -34,6 +34,8 @@ export class Hud {
     rect(-LAND, -LAND, LAND, LAND, '#d9c58f');
     const ce = HALF + ROAD / 2;
     rect(-ce, -ce, ce, ce, '#5b5f66');
+    const gz = this.g.gangs.zone;
+    rect(gz.x0, gz.z0, gz.x1, gz.z1, '#4f7a52');
     for (const b of this.g.city.blocks) {
       rect(b.x0, b.z0, b.x1, b.z1, '#9b9b96');
       const col = b.type === 'park' ? '#5c9a46' : b.type === 'garage' ? '#3a9a63' : '#2f3238';
@@ -81,7 +83,11 @@ export class Hud {
     c.restore();
     c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, px - px * 0.06, px, px * 0.06);
     c.fillStyle = '#fff'; c.font = `${px * 0.028}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText('Карта Sunrise Bay — M, чтобы закрыть', px / 2, px - px * 0.03);
+    const st = g.stats;
+    c.fillText(`Миссий выполнено: ${st.missions} · Бандитов побеждено: ${st.gang} · M — закрыть`, px / 2, px - px * 0.03);
+    const [zu, zv] = at((g.gangs.zone.x0 + g.gangs.zone.x1) / 2, (g.gangs.zone.z0 + g.gangs.zone.z1) / 2);
+    c.fillStyle = '#7dff9a'; c.font = `bold ${px * 0.026}px sans-serif`;
+    c.fillText('Район банды', zu, zv);
   }
 
   update(dt) {
@@ -96,6 +102,8 @@ export class Hud {
     for (let i = 1; i <= 5; i++) s += `<span class="${i <= g.wanted ? (flashing ? 'st dim' : 'st on') : 'st'}">★</span>`;
     if (el.stars._v !== s) { el.stars.innerHTML = s; el.stars._v = s; }
     el.hp.style.width = p.health + '%';
+    el.armor.style.width = p.armor + '%';
+    el.armor.parentElement.style.display = p.armor > 0 ? 'block' : 'none';
     const wtxt = p.weapon === 'pistol' ? `🔫 ${p.ammo}` : (p.ammo > 0 ? `👊 <small>(🔫 ${p.ammo})</small>` : '👊');
     if (el.weapon._v !== wtxt) { el.weapon.innerHTML = wtxt; el.weapon._v = wtxt; }
     const h = Math.floor(g.hour) % 24, m = Math.floor((g.hour % 1) * 60);

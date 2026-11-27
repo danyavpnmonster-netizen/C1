@@ -112,6 +112,7 @@ export class Missions {
     const g = this.game, m = this.active;
     const pay = Math.round(m.reward + (m.bonus ? m.time * m.bonus : 0));
     g.addMoney(pay);
+    g.stats.missions++;
     g.hud.big(`МИССИЯ ВЫПОЛНЕНА\n+$${pay}`, 3.5);
     g.sfx.ok();
     this.end();

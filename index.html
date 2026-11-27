@@ -18,6 +18,8 @@
   .st.on { color: #fff; } .st.dim { color: #888; }
   #hpbar { width: 160px; height: 10px; background: rgba(0,0,0,0.6); border: 2px solid #000; margin: 6px 0 0 auto; }
   #hpfill { height: 100%; width: 100%; background: linear-gradient(#ff6b6b, #c0392b); transition: width .2s; }
+  #armorbar { width: 160px; height: 8px; background: rgba(0,0,0,0.6); border: 2px solid #000; margin: 6px 0 0 auto; display: none; }
+  #armorfill { height: 100%; width: 0; background: linear-gradient(#9fd0ff, #3a7bff); transition: width .2s; }
   #minimap { position: fixed; left: 16px; bottom: 16px; width: 190px; height: 190px; pointer-events: none; }
   #speed { bottom: 22px; right: 22px; font-size: 38px; font-weight: bold; display: none; text-align: right; }
   #speed small { font-size: 16px; }
@@ -61,7 +63,7 @@
   body.touch #carname { display: none; }
   body.touch #minimap { top: 12px; left: 12px; bottom: auto; width: 120px; height: 120px; }
   body.touch #msg { bottom: 110px; font-size: 18px; }
-  @media (max-width: 600px) { #minimap { width: 140px; height: 140px; } #big { font-size: 34px; } #money { font-size: 22px; } #clock { font-size: 18px; } #stars { font-size: 20px; } #hpbar { width: 110px; } }
+  @media (max-width: 600px) { #minimap { width: 140px; height: 140px; } #big { font-size: 34px; } #money { font-size: 22px; } #clock { font-size: 18px; } #stars { font-size: 20px; } #hpbar, #armorbar { width: 110px; } }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
@@ -74,6 +76,7 @@
 <div id="topright" class="hud">
   <div id="clock">09:00</div>
   <div id="money">$00000000</div>
+  <div id="armorbar" class="bar"><div id="armorfill"></div></div>
   <div id="hpbar"><div id="hpfill"></div></div>
   <div id="stars"></div>
   <div id="weapon">👊</div>
@@ -119,7 +122,7 @@
       <tr><td>Shift</td><td>бег; в машине — нитро</td></tr>
       <tr><td>M / H</td><td>большая карта / сигнал</td></tr>
     </table>
-    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ,
+    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!),
       <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
     <div class="go">ИГРАТЬ</div>
   </div>

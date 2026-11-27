@@ -95,6 +95,7 @@ export class City {
     const list = this.grid.get(blockIndex(x) + ',' + blockIndex(z));
     if (!list) return false;
     for (const c of list) {
+      if (c.maxX - c.minX < 1) continue;   // деревья и фонари не закрывают обзор
       if (y < c.h && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true;
     }
     return false;

@@ -9,7 +9,7 @@ export class Player {
     game.scene.add(this.mesh);
     this.pos = new THREE.Vector3();
     this.vy = 0; this.facing = 0; this.phase = 0;
-    this.health = 100; this.money = 0;
+    this.health = 100; this.armor = 0; this.money = 0;
     this.car = null; this.lastCar = null;
     this.punchT = 0; this.punchCd = 0;
     this.knock = new THREE.Vector3();
@@ -35,6 +35,8 @@ export class Player {
 
   hurt(v) {
     if (this.game.state !== 'play') return;
+    const absorbed = Math.min(this.armor, v * 0.8);
+    this.armor -= absorbed; v -= absorbed;
     this.health = Math.max(0, this.health - v);
     if (this.health <= 0) this.game.died();
   }
@@ -116,6 +118,11 @@ export class Player {
       this.punchCd = 0.45; this.punchT = 0.3;
       g.sfx.punch();
       const ffx = Math.sin(this.facing), ffz = Math.cos(this.facing);
+      for (const m of g.gangs.list) {
+        if (m.state !== 'idle' && m.state !== 'fight') continue;
+        const dx = m.pos.x - this.pos.x, dz = m.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        if (d < 1.6 && (dx * ffx + dz * ffz) / (d || 1) > 0.3) { g.gangs.hit(m, 0.5, 0, 0); g.sfx.hit(0.4); break; }
+      }
       for (const p of g.peds.list) {
         if (p.state !== 'walk' && p.state !== 'flee') continue;
         const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, d = Math.hypot(dx, dz);
