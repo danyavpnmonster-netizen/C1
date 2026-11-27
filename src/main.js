@@ -13,6 +13,7 @@ import { Sfx } from './audio.js';
 import { Gangs } from './gangs.js';
 import { Weather } from './weather.js';
 import { Shops } from './shops.js';
+import { Skids } from './skids.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -68,6 +69,7 @@ class Game {
     this.police = new Police(this);
     this.missions = new Missions(this);
     this.shops = new Shops(this);
+    this.skids = new Skids(this.scene);
     this.hud = new Hud(this);
     for (let k = 0; k < 16; k++) this.traffic.spawn(25, 170);
     this.initPickups();
@@ -290,35 +292,65 @@ class Game {
   }
 
   // ---------- физика взаимодействий ----------
+  // Столкновение двух машин: каждая — три круга. Импульс в точке контакта
+  // с учётом масс и моментов инерции, поэтому удар в угол закручивает машину.
+  collideCars(a, b) {
+    const ra = a.radius, rb = b.radius;
+    let best = null;
+    for (const ca of a.circles()) for (const cb of b.circles()) {
+      const dx = cb.x - ca.x, dz = cb.z - ca.z, d = Math.hypot(dx, dz), pen = ra + rb - d;
+      if (pen > 0 && d > 1e-4 && (!best || pen > best.pen)) best = { ca, dx, dz, d, pen };
+    }
+    if (!best) return 0;
+    const nx = best.dx / best.d, nz = best.dz / best.d;
+    const ima = 1 / a.mass, imb = 1 / b.mass, sum = ima + imb;
+    // разводим машины пропорционально обратной массе
+    a.pos.x -= nx * best.pen * ima / sum; a.pos.z -= nz * best.pen * ima / sum;
+    b.pos.x += nx * best.pen * imb / sum; b.pos.z += nz * best.pen * imb / sum;
+    // точка контакта и плечи
+    const px = best.ca.x + nx * (ra - best.pen / 2), pz = best.ca.z + nz * (ra - best.pen / 2);
+    const rax = px - a.pos.x, raz = pz - a.pos.z, rbx = px - b.pos.x, rbz = pz - b.pos.z;
+    const va = a.pointVel(rax, raz), vb = b.pointVel(rbx, rbz);
+    const vn = (vb.x - va.x) * nx + (vb.z - va.z) * nz;
+    if (vn >= 0) return 0;
+    const rna = raz * nx - rax * nz, rnb = rbz * nx - rbx * nz;
+    const e = 0.2;
+    const J = -(1 + e) * vn / (sum + rna * rna / a.inertia + rnb * rnb / b.inertia);
+    a.applyImpulse(-nx * J, -nz * J, rax, raz);
+    b.applyImpulse(nx * J, nz * J, rbx, rbz);
+    // трение металла о металл
+    const tx = -nz, tz = nx;
+    const va2 = a.pointVel(rax, raz), vb2 = b.pointVel(rbx, rbz);
+    const vt = (vb2.x - va2.x) * tx + (vb2.z - va2.z) * tz;
+    const rta = raz * tx - rax * tz, rtb = rbz * tx - rbx * tz;
+    let Jt = -vt / (sum + rta * rta / a.inertia + rtb * rtb / b.inertia);
+    Jt = Math.max(-0.3 * J, Math.min(0.3 * J, Jt));
+    a.applyImpulse(-tx * Jt, -tz * Jt, rax, raz);
+    b.applyImpulse(tx * Jt, tz * Jt, rbx, rbz);
+    // повреждения — по изменению скорости каждой машины (лёгкой достаётся больше)
+    const closing = -vn;
+    if (closing > 4) {
+      const dva = J * ima, dvb = J * imb;
+      a.damage(dva * dva * 0.15); b.damage(dvb * dvb * 0.15);
+    }
+    return closing;
+  }
+
   carCollisions() {
     const cars = this.cars, p = this.player;
     for (let i = 0; i < cars.length; i++) {
       const a = cars[i];
       for (let j = i + 1; j < cars.length; j++) {
         const b = cars[j];
-        let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
-        const d = Math.hypot(dx, dz), rr = a.T.l * 0.45 + b.T.l * 0.45;
-        if (d >= rr || d < 1e-4 || Math.abs(a.pos.y - b.pos.y) > 1.5) continue;
-        dx /= d; dz /= d;
-        const push = (rr - d) / 2;
-        a.pos.x -= dx * push; a.pos.z -= dz * push;
-        b.pos.x += dx * push; b.pos.z += dz * push;
-        const fa = a.forward(), fb = b.forward();
-        const va = (fa.x * dx + fa.z * dz) * a.speed, vb = (fb.x * dx + fb.z * dz) * b.speed;
-        const closing = va - vb;
-        if (closing > 0) {
-          a.speed -= (fa.x * dx + fa.z * dz) * closing * 0.6;
-          b.speed += (fb.x * dx + fb.z * dz) * closing * 0.6;
-          if (closing > 4) {
-            const dmg = closing * closing * 0.05;
-            a.damage(dmg); b.damage(dmg);
-            if (a === p.car || b === p.car) {
-              this.sfx.hit(Math.min(1, closing / 15));
-              const other = a === p.car ? b : a;
-              if (other.role === 'police') this.crime(1.5);
-              else if (closing > 8) this.crime(0.4);
-            }
-          }
+        const lim = (a.T.l + b.T.l) / 2 + 0.5;
+        if (Math.abs(b.pos.x - a.pos.x) > lim || Math.abs(b.pos.z - a.pos.z) > lim) continue;
+        if (Math.abs(a.pos.y - b.pos.y) > 1.5) continue;
+        const closing = this.collideCars(a, b);
+        if (closing > 4 && (a === p.car || b === p.car)) {
+          this.sfx.hit(Math.min(1, closing / 15));
+          const other = a === p.car ? b : a;
+          if (other.role === 'police') this.crime(1.5);
+          else if (closing > 8) this.crime(0.4);
         }
       }
     }
@@ -544,7 +576,7 @@ class Game {
       if (car === p.car) ctl = ctlPlayer;
       else if (car.role === 'traffic' && car.ai) ctl = trafficControl(car, dt, this);
       else if (car.role === 'police') ctl = this.police.control(car, dt);
-      car.update(dt, ctl, this.city);
+      car.update(dt, ctl, this.city, 1 - this.weather.amount * 0.25);
       if (car === p.car && car.lastImpact > 4) { this.sfx.hit(Math.min(1, car.lastImpact / 15)); }
       if (car.wrecked && !car.exploded && car.wreckT > 3) this.explode(car);
     }
@@ -552,6 +584,7 @@ class Game {
       this.hud.message('Машина горит! Выходите (F)', 2.5);
     }
     this.carCollisions();
+    this.skids.update(this.cars);
     this.peds.update(dt);
     this.gangs.update(dt);
     this.weather.update(dt);
@@ -573,6 +606,8 @@ class Game {
     const c = p.car;
     const sirenLvl = this.wanted > 0 ? clamp(1 - this.police.nearest / 120, 0, 1) : 0;
     this.sfx.update(dt, !!c && !c.wrecked, c ? Math.abs(c.speed) / c.T.max : 0, sirenLvl, !!c && inp.down('KeyH'));
+    const sk = c && !c.airborne && Math.hypot(c.vel.x, c.vel.z) > 3 ? Math.max(0, (c.skid - 0.35) / 0.65) : 0;
+    this.sfx.screech(sk);
     this.saveT = (this.saveT || 0) + dt;
     if (this.saveT > 10) { this.saveT = 0; this.save(); }
   }

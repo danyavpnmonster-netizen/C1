@@ -31,6 +31,11 @@ export class Sfx {
       const rf = ctx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1200;
       this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
       rs.connect(rf).connect(this.rainGain).connect(this.master); rs.start();
+      // визг шин — узкополосный шум
+      const ss = ctx.createBufferSource(); ss.buffer = this.noiseBuf; ss.loop = true; ss.playbackRate.value = 0.7;
+      this.screechF = ctx.createBiquadFilter(); this.screechF.type = 'bandpass'; this.screechF.frequency.value = 1100; this.screechF.Q.value = 6;
+      this.screechGain = ctx.createGain(); this.screechGain.gain.value = 0;
+      ss.connect(this.screechF).connect(this.screechGain).connect(this.master); ss.start();
     } catch (e) { this.ctx = null; }
   }
 
@@ -60,6 +65,13 @@ export class Sfx {
     o.type = type; o.frequency.value = freq;
     g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g).connect(this.master); o.start(t0); o.stop(t0 + dur);
+  }
+
+  screech(level) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.screechGain.gain.setTargetAtTime(level * 0.12, now, 0.05);
+    this.screechF.frequency.setTargetAtTime(900 + level * 500 + Math.sin(this.t * 13) * 60, now, 0.05);
   }
 
   rain(level) {
