@@ -33,6 +33,15 @@ export class Player {
     if (first) this.setWeapon('pistol');
   }
 
+  heal(v) { this.health = Math.min(100, this.health + v); }
+
+  setOutfit(shirt, pants) {
+    this.outfit = [shirt, pants];
+    const ch = this.mesh.children, u = this.mesh.userData;
+    u.lL.material = u.lR.material = mat(pants);
+    ch[2].material = u.aL.material = u.aR.material = mat(shirt);
+  }
+
   hurt(v) {
     if (this.game.state !== 'play') return;
     const absorbed = Math.min(this.armor, v * 0.8);
@@ -95,12 +104,12 @@ export class Player {
       }
     }
     // смена оружия
-    if (playing) {
+    if (playing && !g.shops.panelOpen) {
       if (inp.pressed('Digit1')) this.setWeapon('fists');
       if (inp.pressed('Digit2')) this.setWeapon('pistol');
       if (inp.pressed('KeyQ')) this.setWeapon(this.weapon === 'fists' ? 'pistol' : 'fists');
     }
-    const attack = playing && (inp.clicked || inp.pressed('KeyE'));
+    const attack = playing && !g.shops.inside && (inp.clicked || inp.pressed('KeyE'));
     // выстрел
     this.shotCd -= dt;
     if (attack && this.weapon === 'pistol') {
@@ -118,6 +127,11 @@ export class Player {
       this.punchCd = 0.45; this.punchT = 0.3;
       g.sfx.punch();
       const ffx = Math.sin(this.facing), ffz = Math.cos(this.facing);
+      for (const o of g.police.officers) {
+        if (o.state !== 'chase' && o.state !== 'return') continue;
+        const dx = o.pos.x - this.pos.x, dz = o.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        if (d < 1.6 && (dx * ffx + dz * ffz) / (d || 1) > 0.3) { g.police.hitOfficer(o, 0.5); g.sfx.hit(0.4); break; }
+      }
       for (const m of g.gangs.list) {
         if (m.state !== 'idle' && m.state !== 'fight') continue;
         const dx = m.pos.x - this.pos.x, dz = m.pos.z - this.pos.z, d = Math.hypot(dx, dz);

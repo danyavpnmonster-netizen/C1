@@ -1,14 +1,153 @@
-import { clamp, wrapAngle, nearestNode } from './config.js';
+import * as THREE from 'three';
+import { clamp, wrapAngle, nearestNode, rnd, randInt, lerpAngle } from './config.js';
 import { nodeXZ, neighbors, attachToRoad } from './traffic.js';
 import { CAR_MATS } from './vehicle.js';
+import { makeHuman, animateHuman, mat } from './human.js';
 
 const WANT_CARS = [0, 1, 2, 3, 4, 6];
+const PARK = { throttle: 0, steer: 0, handbrake: 1 };
+const CAP = new THREE.BoxGeometry(0.32, 0.1, 0.32), BRIM = new THREE.BoxGeometry(0.32, 0.04, 0.16);
+const GUN = new THREE.BoxGeometry(0.1, 0.16, 0.34);
+
+// Полицейский пешком.
+class Officer {
+  constructor(scene, car, x, z) {
+    this.mesh = makeHuman(0x1d2f5a, 0x12182a, [0xf1c27d, 0xc68642, 0x8d5524, 0xe0ac69][randInt(0, 3)], 0x1a1209);
+    const cap = new THREE.Mesh(CAP, mat(0x111a33)); cap.position.y = 1.86;
+    const brim = new THREE.Mesh(BRIM, mat(0x111a33)); brim.position.set(0, 1.82, 0.2);
+    const gun = new THREE.Mesh(GUN, mat(0x111111)); gun.position.set(0, -0.62, 0.12);
+    this.mesh.add(cap, brim); this.mesh.userData.aR.add(gun);
+    scene.add(this.mesh);
+    this.car = car;
+    this.pos = new THREE.Vector3(x, 0, z);
+    this.vel = new THREE.Vector3();
+    this.state = 'chase'; this.hp = 2; this.timer = 0;
+    this.facing = car.heading; this.phase = rnd(0, 6); this.shotT = rnd(0.8, 1.6);
+  }
+}
 
 export class Police {
   constructor(game) {
     this.game = game;
     this.spawnT = 0; this.bustT = 0; this.lostT = 0; this.shotT = 0;
     this.nearest = Infinity; this.flash = 0;
+    this.officers = [];
+  }
+
+  // Высадка двух полицейских из машины рядом с игроком.
+  deploy(car) {
+    const g = this.game, lx = Math.cos(car.heading), lz = -Math.sin(car.heading);
+    for (const side of [1, -1]) {
+      const o = new Officer(g.scene, car, car.pos.x + lx * 1.8 * side, car.pos.z + lz * 1.8 * side);
+      this.officers.push(o);
+    }
+    car.copsOut = 2;
+    car.driverMesh.visible = false;
+  }
+
+  removeOfficer(o) {
+    this.game.scene.remove(o.mesh);
+    this.officers.splice(this.officers.indexOf(o), 1);
+  }
+
+  clearOfficers() {
+    for (const o of this.officers.slice()) this.removeOfficer(o);
+    for (const c of this.game.cars) c.copsOut = 0;
+  }
+
+  hitOfficer(o, dmg, dx = 0, dz = 0) {
+    if (o.state === 'flying' || o.state === 'dead') return;
+    o.hp -= dmg;
+    this.game.crime(o.hp <= 0 ? 4 : 2);
+    if (o.hp > 0) return;
+    o.state = 'flying';
+    o.vel.set(dx * 3, 2.5, dz * 3);
+    o.pos.y = 0.3;
+    if (Math.random() < 0.7) this.game.addPickup('ammo', o.pos.x + rnd(-1, 1), o.pos.z + rnd(-1, 1), 12, false);
+  }
+
+  updateOfficers(dt) {
+    const g = this.game, P = g.playerPos(), pl = g.player, pc = pl.car, city = g.city;
+    let arresting = false;
+    for (const o of this.officers.slice()) {
+      const dx = P.x - o.pos.x, dz = P.z - o.pos.z, d = Math.hypot(dx, dz) || 0.001;
+      const carOk = o.car && g.cars.includes(o.car) && o.car.role === 'police' && !o.car.wrecked;
+      let moving = 0, aiming = false;
+      if (o.state === 'chase' || o.state === 'return') {
+        // уходим к машине: розыск снят или игрок уехал
+        const fleeing = pc && (Math.abs(pc.speed) > 8 || d > 45);
+        if (carOk && (g.wanted === 0 || fleeing)) o.state = 'return';
+        else if (g.wanted > 0) o.state = 'chase';
+        if (o.state === 'return' && carOk) {
+          const cx = o.car.pos.x - o.pos.x, cz = o.car.pos.z - o.pos.z, cd = Math.hypot(cx, cz);
+          if (cd < 2.6) {
+            o.car.copsOut = Math.max(0, (o.car.copsOut || 1) - 1);
+            if (!o.car.copsOut) { o.car.driverMesh.visible = true; o.car.deployCd = 8; }
+            this.removeOfficer(o); continue;
+          }
+          o.pos.x += cx / cd * 5 * dt; o.pos.z += cz / cd * 5 * dt;
+          o.facing = Math.atan2(cx, cz); moving = 1.2; o.phase += dt * 12;
+        } else if (o.state === 'return' || g.wanted === 0) {
+          // машины нет — уходим пешком и исчезаем вдали
+          o.pos.x -= dx / d * 1.5 * dt; o.pos.z -= dz / d * 1.5 * dt;
+          o.facing = Math.atan2(-dx, -dz); moving = 1; o.phase += dt * 6;
+          if (d > 70) { this.removeOfficer(o); continue; }
+        } else {
+          // погоня: при 1–2 звёздах бегут арестовать, с 3 — держат дистанцию и стреляют
+          const hold = g.wanted >= 3 ? 9 : 1.1;
+          const canShoot = g.wanted >= 2 && g.state === 'play' && !g.shops.inside;
+          if (d > hold && !(canShoot && d < 12 && g.wanted >= 3)) {
+            const sp = pc ? 6.5 : 5.8;
+            o.pos.x += dx / d * sp * dt; o.pos.z += dz / d * sp * dt;
+            moving = 1.3; o.phase += dt * 13;
+          }
+          o.facing = lerpAngle(o.facing, Math.atan2(dx, dz), Math.min(1, dt * 10));
+          if (!pc && d < 1.7 && g.state === 'play') arresting = true;
+          o.shotT -= dt;
+          if (canShoot && d > 3 && d < 24) {
+            aiming = true;
+            if (o.shotT <= 0) {
+              o.shotT = rnd(0.9, 1.5);
+              let blocked = false;
+              for (let s = 1; s < d; s += 1) if (city.pointBlocked(o.pos.x + dx / d * s, 1.4, o.pos.z + dz / d * s)) { blocked = true; break; }
+              if (!blocked) {
+                g.tracer(o.pos.x, 1.4, o.pos.z, P.x, P.z);
+                g.sfx.shot();
+                if (Math.random() < 0.6 - d / 60) {
+                  if (pc) pc.damage(4); else pl.hurt(6);
+                  g.hud.hitFlash();
+                }
+              }
+            }
+          }
+        }
+        city.collide(o.pos, 0.35);
+        // игрок сбивает полицейского
+        if (pc && Math.abs(pc.speed) > 5 && d < pc.T.l * 0.5) {
+          const f = pc.forward(), sg = Math.sign(pc.speed);
+          this.hitOfficer(o, 99, f.x * sg * 2, f.z * sg * 2);
+          g.sfx.hit(0.5);
+        }
+      } else if (o.state === 'flying') {
+        o.vel.y -= 18 * dt;
+        o.pos.addScaledVector(o.vel, dt);
+        o.mesh.rotation.x += dt * 9;
+        if (o.pos.y <= 0.15) { o.pos.y = 0.15; o.state = 'dead'; o.mesh.rotation.set(-Math.PI / 2, o.facing, 0, 'YXZ'); }
+      } else if (o.state === 'dead') {
+        o.timer += dt;
+        if (o.timer > 20 || d > 150) { this.removeOfficer(o); continue; }
+      }
+      o.mesh.position.copy(o.pos);
+      if (o.state === 'chase' || o.state === 'return') {
+        o.mesh.rotation.y = o.facing;
+        animateHuman(o.mesh, o.phase, moving, aiming ? 1 : 0);
+      }
+    }
+    // машины, чьи полицейские погибли, остаются пустыми
+    for (const c of g.cars) {
+      if (c.copsOut && !this.officers.some((o) => o.car === c && o.state !== 'dead' && o.state !== 'flying')) c.copsOut = 0;
+    }
+    return arresting;
   }
 
   get cars() { return this.game.cars.filter((c) => c.role === 'police'); }
@@ -22,11 +161,21 @@ export class Police {
     CAR_MATS.red.emissiveIntensity = active ? (on ? 2.5 : 0.1) : 0.1;
     CAR_MATS.blue.emissiveIntensity = active ? (on ? 0.1 : 2.5) : 0.1;
 
+    const arresting = this.updateOfficers(dt);
     if (!active) {
-      for (const c of cops) { c.role = 'traffic'; attachToRoad(c); }
+      for (const c of cops) if (!c.copsOut) { c.role = 'traffic'; attachToRoad(c); }
       this.bustT = 0; this.lostT = 0; this.nearest = Infinity;
       return;
     }
+    // высадка: машина остановилась рядом с игроком
+    const pc0 = g.player.car;
+    if (g.state === 'play' && !g.shops.inside && (!pc0 || Math.abs(pc0.speed) < 4)) {
+      for (const c of cops) {
+        if (c.wrecked || c.copsOut || c.deployCd > 0) continue;
+        if (Math.abs(c.speed) < 2.5 && Math.hypot(c.pos.x - P.x, c.pos.z - P.z) < 22) this.deploy(c);
+      }
+    }
+    for (const c of cops) c.deployCd = Math.max(0, (c.deployCd || 0) - dt);
     this.spawnT -= dt;
     if (cops.length < WANT_CARS[g.wanted] && this.spawnT <= 0) {
       g.traffic.spawn(80, 150, 'police', 'police');
@@ -39,6 +188,9 @@ export class Police {
       const d = Math.hypot(c.pos.x - P.x, c.pos.z - P.z);
       if (d < nd) { nd = d; nc = c; }
     }
+    for (const o of this.officers) {
+      if (o.state === 'chase') nd = Math.min(nd, Math.hypot(o.pos.x - P.x, o.pos.z - P.z));
+    }
     this.nearest = nd;
 
     // потеря преследования
@@ -50,7 +202,8 @@ export class Police {
     // арест
     const pc = g.player.car;
     const pSpeed = pc ? Math.abs(pc.speed) : 0;
-    if (g.state === 'play' && nc && nd < 9 && Math.abs(nc.speed) < 6 && pSpeed < 3) this.bustT += dt;
+    const carBust = pc && nc && !nc.copsOut && Math.hypot(nc.pos.x - P.x, nc.pos.z - P.z) < 9 && Math.abs(nc.speed) < 6 && pSpeed < 3;
+    if (g.state === 'play' && !g.shops.inside && (carBust || arresting)) this.bustT += dt;
     else this.bustT = Math.max(0, this.bustT - dt * 1.5);
     if (this.bustT > 2.2) { this.bustT = 0; g.busted(); return; }
 
@@ -58,8 +211,8 @@ export class Police {
     if (g.wanted >= 3 && g.state === 'play') {
       this.shotT -= dt;
       if (this.shotT <= 0) {
-        const shooters = Math.min(3, cops.filter((c) => !c.wrecked &&
-          Math.hypot(c.pos.x - P.x, c.pos.z - P.z) < 40).length);
+        const shooters = pc ? Math.min(3, cops.filter((c) => !c.wrecked && !c.copsOut &&
+          Math.hypot(c.pos.x - P.x, c.pos.z - P.z) < 40).length) : 0;
         if (shooters) {
           this.shotT = 0.6;
           if (pc) pc.damage(2.5 * shooters); else g.player.hurt(2 * shooters);
@@ -72,6 +225,7 @@ export class Police {
 
   control(car, dt) {
     const g = this.game, P = g.playerPos(), pc = g.player.car;
+    if (car.copsOut) return PARK;
     const ai = car.ai || (car.ai = {});
     const d = Math.hypot(P.x - car.pos.x, P.z - car.pos.z);
     let ax, az;

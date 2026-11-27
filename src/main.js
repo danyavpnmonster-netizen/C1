@@ -12,6 +12,7 @@ import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { Gangs } from './gangs.js';
 import { Weather } from './weather.js';
+import { Shops } from './shops.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -66,6 +67,7 @@ class Game {
     this.traffic = new Traffic(this);
     this.police = new Police(this);
     this.missions = new Missions(this);
+    this.shops = new Shops(this);
     this.hud = new Hud(this);
     for (let k = 0; k < 16; k++) this.traffic.spawn(25, 170);
     this.initPickups();
@@ -123,7 +125,10 @@ class Game {
     this.camera.updateProjectionMatrix();
   }
 
-  playerPos() { return this.player.car ? this.player.car.pos : this.player.pos; }
+  playerPos() {
+    if (this.shops?.inside) return this.shops.inside.door;
+    return this.player.car ? this.player.car.pos : this.player.pos;
+  }
 
   addCar(type, x, z, heading) {
     const c = new Car(this.scene, type);
@@ -184,6 +189,7 @@ class Game {
     this.player.health = 100; this.player.vy = 0; this.player.knock.set(0, 0, 0);
     this.setWanted(0);
     this.gangs.alert = 0;
+    this.police.clearOfficers();
     for (const c of this.cars.slice()) if (c.role === 'police') this.removeCar(c);
     this.state = 'play';
     this.hud.message(dead ? `Больница: −$${fine}` : `Штраф: −$${fine}`, 3);
@@ -363,6 +369,12 @@ class Game {
       if (t < 0.3 || t > bt) continue;
       if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = m; kind = 'gang'; }
     }
+    for (const o of this.police.officers) {
+      if (o.state !== 'chase' && o.state !== 'return') continue;
+      const rx = o.pos.x - x, rz = o.pos.z - z, t = rx * dx + rz * dz;
+      if (t < 0.3 || t > bt) continue;
+      if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = o; kind = 'cop'; }
+    }
     for (const c of this.cars) {
       if (c === this.player.car) continue;
       const rx = c.pos.x - x, rz = c.pos.z - z, t = rx * dx + rz * dz;
@@ -374,6 +386,7 @@ class Game {
     }
     this.tracer(x + dx * 0.8, y, z + dz * 0.8, x + dx * bt, z + dz * bt);
     if (kind === 'ped') { this.peds.shot(best, dx, dz); this.crime(3); }
+    else if (kind === 'cop') { this.police.hitOfficer(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'gang') { this.gangs.hit(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'car') {
       best.damage(14);
@@ -495,11 +508,11 @@ class Game {
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; this.player.ammo = s.ammo | 0; this.player.armor = s.armor | 0; Object.assign(this.stats, s.stats || {}); }
+      if (s) { this.player.money = s.money | 0; this.hour = s.hour ?? 9; this.player.ammo = s.ammo | 0; this.player.armor = s.armor | 0; Object.assign(this.stats, s.stats || {}); if (s.outfit) this.player.setOutfit(...s.outfit); }
     } catch (e) { /* хранилище недоступно */ }
   }
   save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo, armor: this.player.armor, stats: this.stats })); } catch (e) { /* нет */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: this.player.money, hour: this.hour, ammo: this.player.ammo, armor: this.player.armor, stats: this.stats, outfit: this.player.outfit })); } catch (e) { /* нет */ }
   }
 
   // ---------- главный цикл ----------
@@ -542,6 +555,7 @@ class Game {
     this.peds.update(dt);
     this.gangs.update(dt);
     this.weather.update(dt);
+    this.shops.update(dt);
     this.traffic.update(dt);
     this.police.update(dt);
     this.missions.update(dt);

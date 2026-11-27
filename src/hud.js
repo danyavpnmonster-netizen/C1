@@ -68,6 +68,7 @@ export class Hud {
       c.fillText(txt, u, v + 1);
     };
     const sp = g.city.sprayPos; if (sp) icon(sp.x, sp.z, '#3dff8a', '$');
+    for (const s of g.city.shops) icon(s.door.x, s.door.z, '#ffe066', s.type === 'guns' ? 'О' : s.type === 'clothes' ? 'Ш' : 'М');
     icon(g.hospital.x, g.hospital.z, '#ff6b6b', 'H');
     icon(g.station.x, g.station.z, '#7aa7ff', 'П');
     if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) icon(gv.pos.x, gv.pos.z, '#' + gv.color.toString(16).padStart(6, '0'), gv.name[0]);
@@ -164,6 +165,8 @@ export class Hud {
       c.fillText(txt, 0, 1); c.restore();
     };
     const sp = g.city.sprayPos; if (sp) label(sp.x, sp.z, '#3dff8a', '$');
+    for (const s of g.city.shops) label(s.door.x, s.door.z, '#ffe066', s.type === 'guns' ? 'О' : s.type === 'clothes' ? 'Ш' : 'М');
+    for (const o of g.police.officers) if (o.state === 'chase') dot(o.pos.x, o.pos.z, '#7fb0ff', 3);
     label(g.hospital.x, g.hospital.z, '#ff6b6b', 'H');
     label(g.station.x, g.station.z, '#7aa7ff', 'П');
     if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) {

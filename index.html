@@ -39,6 +39,15 @@
   #hitflash { inset: 0; background: #ff0000; opacity: 0; transition: opacity .15s; }
   #bustwrap { top: 40%; left: 50%; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(0,0,0,.6); display: none; border: 2px solid #000; }
   #bust { height: 100%; width: 0; background: #3a7bff; }
+  #shop { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); width: min(320px, calc(100vw - 32px)); background: rgba(10,14,28,.88); border: 2px solid var(--accent); border-radius: 10px; padding: 12px; display: none; z-index: 7; }
+  #shop h3 { margin: 0 0 8px; color: var(--accent); letter-spacing: 1px; }
+  #shop button { display: flex; align-items: center; gap: 10px; width: 100%; margin: 6px 0; padding: 8px 10px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); border-radius: 8px; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+  #shop button:hover, #shop button:active { background: rgba(255,204,51,.25); }
+  #shop button b { color: var(--accent); }
+  #shop button span { flex: 1; display: flex; flex-direction: column; }
+  #shop button small { opacity: .7; font-size: 12px; }
+  #shop button em { font-style: normal; color: #7dff7d; font-weight: bold; }
+  #shop p { margin: 6px 0 0; font-size: 12px; opacity: .7; }
   #help { top: 14px; left: 16px; font-size: 12px; line-height: 1.5; opacity: .8; }
   body.touch #help { display: none; }
 
@@ -87,6 +96,7 @@
 </div>
 <canvas id="minimap" width="190" height="190"></canvas>
 <canvas id="bigmap"></canvas>
+<div id="shop"></div>
 <div id="mission" class="hud"></div>
 <div id="timer" class="hud"></div>
 <div id="arrowWrap" class="hud"><div id="arrow"></div><div id="dist"></div></div>
@@ -122,7 +132,7 @@
       <tr><td>Shift</td><td>бег; в машине — нитро</td></tr>
       <tr><td>M / H</td><td>большая карта / сигнал</td></tr>
     </table>
-    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!),
+    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!), жёлтые кольца у дверей — входы в магазины,
       <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
     <div class="go">ИГРАТЬ</div>
   </div>
