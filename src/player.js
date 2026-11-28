@@ -136,10 +136,10 @@ export class Player {
         const dx = m.pos.x - this.pos.x, dz = m.pos.z - this.pos.z, d = Math.hypot(dx, dz);
         if (d < 1.6 && (dx * ffx + dz * ffz) / (d || 1) > 0.3) { g.gangs.hit(m, 0.5, 0, 0); g.sfx.hit(0.4); break; }
       }
-      const rt = g.net.remoteTarget();
-      if (rt && !rt.inCar) {
+      for (const rt of g.net.remoteTargets()) {
+        if (rt.inCar) continue;
         const dx = rt.x - this.pos.x, dz = rt.z - this.pos.z, d = Math.hypot(dx, dz);
-        if (d < 1.6 && (dx * ffx + dz * ffz) / (d || 1) > 0.3) { g.net.hitRemote(8); g.sfx.hit(0.4); }
+        if (d < 1.6 && (dx * ffx + dz * ffz) / (d || 1) > 0.3) { g.net.hitRemote(rt.id, 8); g.sfx.hit(0.4); break; }
       }
       for (const p of g.peds.list) {
         if (p.state !== 'walk' && p.state !== 'flee') continue;

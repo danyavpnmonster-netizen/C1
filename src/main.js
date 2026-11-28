@@ -95,6 +95,7 @@ class Game {
 
   begin(test) {
     document.getElementById('start').style.display = 'none';
+    document.body.classList.add('playing');
     this.sfx.init();
     if (!this.input.isTouch) { try { this.renderer.domElement.requestPointerLock?.()?.catch?.(() => {}); } catch (e) { /* курсор не захвачен — не страшно */ } }
     if (this.state === 'menu') {
@@ -372,12 +373,12 @@ class Game {
       }
     }
     // машины и пешеходы
-    const rt = this.net.remoteTarget();
     this.netHitCd = Math.max(0, (this.netHitCd || 0) - 1 / 60);
-    if (rt && !rt.inCar && p.car && this.netHitCd <= 0) {
+    for (const rt of this.net.remoteTargets()) {
+      if (rt.inCar || !p.car || this.netHitCd > 0) continue;
       const s = Math.abs(p.car.speed), f = p.car.forward(), sg = Math.sign(p.car.speed);
       if (s > 5 && Math.hypot(rt.x - p.car.pos.x, rt.z - p.car.pos.z) < p.car.T.l * 0.5) {
-        this.net.hitRemote(s * 1.6, f.x * s * sg * 0.8, f.z * s * sg * 0.8);
+        this.net.hitRemote(rt.id, s * 1.6, f.x * s * sg * 0.8, f.z * s * sg * 0.8);
         this.netHitCd = 1; this.sfx.hit(0.6);
       }
     }
@@ -436,8 +437,8 @@ class Game {
       if (t < 0.3 || t > bt) continue;
       if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = o; kind = 'cop'; }
     }
-    const rt = this.net.remoteTarget();
-    if (rt && !rt.inCar) {
+    for (const rt of this.net.remoteTargets()) {
+      if (rt.inCar) continue;
       const rx = rt.x - x, rz = rt.z - z, t = rx * dx + rz * dz;
       if (t > 0.3 && t < bt && Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = rt; kind = 'net'; }
     }
@@ -452,8 +453,8 @@ class Game {
     }
     this.tracer(x + dx * 0.8, y, z + dz * 0.8, x + dx * bt, z + dz * bt);
     if (kind === 'ped') { this.peds.shot(best, dx, dz); this.crime(3); }
-    else if (kind === 'net') { this.net.hitRemote(12); this.sfx.hit(0.3); }
-    else if (kind === 'car' && best.role === 'remote') { this.net.hitRemote(14); this.sfx.hit(0.2); }
+    else if (kind === 'net') { this.net.hitRemote(best.id, 12); this.sfx.hit(0.3); }
+    else if (kind === 'car' && best.role === 'remote') { this.net.hitRemote(best.netId, 14); this.sfx.hit(0.2); }
     else if (kind === 'cop') { this.police.hitOfficer(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'gang') { this.gangs.hit(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'car' && best.role !== 'remote') {
@@ -604,6 +605,7 @@ class Game {
       if (inp.pressed('KeyF')) this.toggleCar();
       if (inp.pressed('Escape') && document.pointerLockElement) document.exitPointerLock();
       if (inp.pressed('KeyM')) this.hud.toggleMap();
+      if (inp.pressed('KeyO')) this.net.open();
     } else {
       this.stateT -= dt;
       if (this.stateT <= 0) this.respawn();

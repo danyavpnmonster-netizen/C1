@@ -69,6 +69,19 @@
   #netpanel button:disabled { opacity: .4; }
   #netpanel button.main { background: #ff9a2e; color: #1a1000; font-weight: bold; text-align: center; }
   #netlist { display: flex; flex-direction: column; gap: 8px; }
+  #netpanel .server { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(255,154,46,.5); border-radius: 10px; background: rgba(255,154,46,.08); }
+  #netpanel .sv-icon { font-size: 26px; }
+  #netpanel .sv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #netpanel .sv-info small { opacity: .75; font-size: 13px; }
+  #netpanel .sv-count { font: bold 16px ui-monospace, monospace; color: #ffd08a; }
+  #netpanel .server button { padding: 10px 16px; }
+  #netpanel .netrow { display: flex; align-items: center; gap: 8px; }
+  #netpanel .netrow label { font-size: 14px; opacity: .8; }
+  #netpanel .netrow input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid #ff9a2e; background: #0a1024; color: #fff; font: 16px "Trebuchet MS", sans-serif; }
+  #hudnet { position: fixed; left: 16px; bottom: 214px; z-index: 6; display: none; padding: 6px 12px; border-radius: 16px; border: 1px solid #ff9a2e; background: rgba(0,0,0,.5); color: #fff; font: 14px "Trebuchet MS", sans-serif; cursor: pointer; }
+  body.playing #hudnet { display: block; }
+  body.online #hudnet { background: rgba(255,154,46,.45); }
+  body.touch #hudnet { left: 12px; top: 138px; bottom: auto; }
   #netlist .hint { opacity: .7; font-size: 14px; }
   #netmanual { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   #netmanual label { width: 100%; font-size: 14px; opacity: .8; }
@@ -132,19 +145,20 @@
 </div>
 <div id="help" class="hud">
   WASD — ходьба / руль · Shift — бег / нитро · Пробел — прыжок / ручник<br>
-  F — сесть/выйти · ЛКМ или E — удар/выстрел · Q — оружие · M — карта · H — сигнал
+  F — сесть/выйти · ЛКМ или E — удар/выстрел · Q — оружие · M — карта · O — серверы · H — сигнал
 </div>
 <canvas id="minimap" width="190" height="190"></canvas>
 <canvas id="bigmap"></canvas>
 <div id="shop"></div>
+<button id="hudnet">🌐 Серверы</button>
 <div id="netpanel">
   <div class="box">
-    <h2>Игра вдвоём по Wi-Fi</h2>
-    <p id="netstatus">Оба телефона должны быть в одной сети Wi-Fi. Один нажимает «Создать игру», второй — выбирает игру в списке.</p>
-    <button id="nethost" class="main">Создать игру</button>
+    <h2>Серверы</h2>
+    <p id="netstatus">Все игроки должны быть в одной сети Wi-Fi.</p>
+    <div class="netrow"><label for="netnick">Ваш ник:</label><input id="netnick" maxlength="14" autocomplete="off"></div>
     <div id="netlist"></div>
-    <div id="netmanual"><label for="netip">Или адрес вручную:</label><input id="netip" inputmode="decimal" placeholder="192.168.1.23" autocomplete="off"><button id="netgo">Подключиться</button></div>
-    <button id="netback">Назад</button>
+    <div id="netmanual"><label for="netip">Сервер по адресу:</label><input id="netip" inputmode="decimal" placeholder="192.168.1.23" autocomplete="off"><button id="netgo">Подключиться</button></div>
+    <button id="netback">Закрыть</button>
   </div>
 </div>
 <div id="testpanel"><pre id="tele"></pre><div id="testbtns"></div></div>
@@ -188,7 +202,7 @@
     <div class="gos">
       <button id="play" class="go">ИГРАТЬ</button>
       <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
-      <button id="netbtn" class="go net">ВДВОЁМ<small>по Wi-Fi</small></button>
+      <button id="netbtn" class="go net">СЕРВЕРЫ<small>игра по Wi-Fi</small></button>
     </div>
   </div>
 </div>

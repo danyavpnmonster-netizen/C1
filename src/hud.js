@@ -1,4 +1,5 @@
 import { HALF, ROAD, LAND, SIDEWALK } from './config.js';
+import { drawIcon, ICONS } from './mapicons.js';
 
 const $ = (id) => document.getElementById(id);
 const S = 0.6;                 // пикселей мини-карты на метр
@@ -61,6 +62,17 @@ export class Hud {
     return c;
   }
 
+  // Все места со значками: магазины, больница, полиция, покраска, задания.
+  places() {
+    const g = this.g, out = [];
+    const sp = g.city.sprayPos; if (sp) out.push({ x: sp.x, z: sp.z, kind: 'spray' });
+    for (const s of g.city.shops) out.push({ x: s.door.x, z: s.door.z, kind: s.type });
+    out.push({ x: g.hospital.x, z: g.hospital.z, kind: 'hospital' });
+    out.push({ x: g.station.x, z: g.station.z, kind: 'police' });
+    if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) out.push({ x: gv.pos.x, z: gv.pos.z, kind: gv.type });
+    return out;
+  }
+
   message(text, t = 3) { this.el.msg.textContent = text; this.msgT = t; this.el.msg.style.opacity = 1; }
   big(text, t = 3) { this.el.big.textContent = text; this.bigT = t; this.el.big.style.opacity = 1; }
   hitFlash() { this.hitT = 0.25; }
@@ -78,17 +90,8 @@ export class Hud {
     const k = px / this.base.width;
     c.drawImage(this.base, 0, 0, px, px);
     const at = (x, z) => { const [u, v] = this.toBase(x, z); return [u * k, v * k]; };
-    const icon = (x, z, col, txt) => {
-      const [u, v] = at(x, z), r = px * 0.018;
-      c.fillStyle = col; c.fillRect(u - r, v - r, r * 2, r * 2);
-      c.fillStyle = '#000'; c.font = `bold ${r * 1.4}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(txt, u, v + 1);
-    };
-    const sp = g.city.sprayPos; if (sp) icon(sp.x, sp.z, '#3dff8a', '$');
-    for (const s of g.city.shops) icon(s.door.x, s.door.z, '#ffe066', s.type === 'guns' ? 'О' : s.type === 'clothes' ? 'Ш' : 'М');
-    icon(g.hospital.x, g.hospital.z, '#ff6b6b', 'H');
-    icon(g.station.x, g.station.z, '#7aa7ff', 'П');
-    if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) icon(gv.pos.x, gv.pos.z, '#' + gv.color.toString(16).padStart(6, '0'), gv.name[0]);
+    const icon = (x, z, kind) => { const [u, v] = at(x, z); drawIcon(c, kind, u, v, px * 0.024); };
+    for (const pl of this.places()) icon(pl.x, pl.z, pl.kind);
     for (const car of g.cars) if (car.role === 'police' && !car.wrecked) {
       const [u, v] = at(car.pos.x, car.pos.z); c.fillStyle = '#ff3030'; c.beginPath(); c.arc(u, v, px * 0.008, 0, 7); c.fill();
     }
@@ -103,6 +106,15 @@ export class Hud {
     c.fillStyle = '#fff'; c.font = `${px * 0.028}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     const st = g.stats;
     c.fillText(`Миссий выполнено: ${st.missions} · Бандитов побеждено: ${st.gang} · M — закрыть`, px / 2, px - px * 0.03);
+    // легенда: значки с подписями
+    const kinds = Object.keys(ICONS), rr = px * 0.016, colW = px / 5;
+    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(0, 0, px, rr * 5.4);
+    c.font = `${px * 0.022}px sans-serif`; c.textAlign = 'left'; c.textBaseline = 'middle';
+    kinds.forEach((kd, i) => {
+      const cx = (i % 5) * colW + rr * 1.8, cy = rr * 1.45 + Math.floor(i / 5) * rr * 2.5;
+      drawIcon(c, kd, cx, cy, rr);
+      c.fillStyle = '#fff'; c.fillText(ICONS[kd].name, cx + rr * 1.5, cy);
+    });
     const [zu, zv] = at(g.gangs.zone.x, g.gangs.zone.z);
     c.fillStyle = '#7dff9a'; c.font = `bold ${px * 0.026}px sans-serif`;
     c.fillText('Район банды', zu, zv);
@@ -174,24 +186,18 @@ export class Hud {
       const [u, v] = this.toBase(x, z);
       c.fillStyle = col; c.beginPath(); c.arc(u, v, r, 0, Math.PI * 2); c.fill();
     };
-    const label = (x, z, col, txt) => {
+    const label = (x, z, kind) => {
       const [u, v] = this.toBase(x, z);
-      c.save(); c.translate(u, v); c.rotate(-g.camYaw);
-      c.fillStyle = col; c.fillRect(-7, -7, 14, 14);
-      c.fillStyle = '#000'; c.font = 'bold 10px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(txt, 0, 1); c.restore();
+      c.save(); c.translate(u, v); c.rotate(-g.camYaw);   // значок всегда стоит прямо
+      drawIcon(c, kind, 0, 0, 9);
+      c.restore();
     };
-    const sp = g.city.sprayPos; if (sp) label(sp.x, sp.z, '#3dff8a', '$');
-    for (const s of g.city.shops) label(s.door.x, s.door.z, '#ffe066', s.type === 'guns' ? 'О' : s.type === 'clothes' ? 'Ш' : 'М');
     for (const o of g.police.officers) if (o.state === 'chase') dot(o.pos.x, o.pos.z, '#7fb0ff', 3);
-    label(g.hospital.x, g.hospital.z, '#ff6b6b', 'H');
-    label(g.station.x, g.station.z, '#7aa7ff', 'П');
-    if (!g.missions.active) for (const gv of g.missions.givers) if (gv.cd <= 0) {
-      label(gv.pos.x, gv.pos.z, '#' + gv.color.toString(16).padStart(6, '0'), gv.name[0]);
-    }
+    for (const pl of this.places()) label(pl.x, pl.z, pl.kind);
     const flash = Math.floor(g.time * 6) % 2;
-    const rt = g.net && g.net.remoteTarget();
-    if (rt) { dot(rt.x, rt.z, '#ff9a2e', 6); dot(rt.x, rt.z, '#fff', 2.5); }
+    if (g.net) for (const rt of g.net.remoteTargets()) {
+      dot(rt.x, rt.z, '#' + rt.col.toString(16).padStart(6, '0'), 6); dot(rt.x, rt.z, '#fff', 2.5);
+    }
     for (const car of g.cars) if (car.role === 'police' && !car.wrecked) dot(car.pos.x, car.pos.z, flash ? '#ff3030' : '#3060ff', 4);
     c.restore();
     // цель миссии (прижимается к краю)
