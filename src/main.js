@@ -16,6 +16,7 @@ import { Shops } from './shops.js';
 import { Skids } from './skids.js';
 import { TestMode } from './testmode.js';
 import { Net } from './net.js';
+import { Homes } from './homes.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -71,6 +72,7 @@ class Game {
     this.police = new Police(this);
     this.missions = new Missions(this);
     this.shops = new Shops(this);
+    this.homes = new Homes(this);
     this.skids = new Skids(this.scene);
     this.test = new TestMode(this);
     this.hud = new Hud(this);
@@ -133,8 +135,15 @@ class Game {
     this.camera.updateProjectionMatrix();
   }
 
-  playerPos() {
+  // Игрок внутри магазина или дома: возвращает дверь, через которую вошёл.
+  get indoor() {
     if (this.shops?.inside) return this.shops.inside.door;
+    if (this.homes?.inside) return this.homes.inside;
+    return null;
+  }
+
+  playerPos() {
+    if (this.indoor) return this.indoor;
     return this.player.car ? this.player.car.pos : this.player.pos;
   }
 
@@ -255,13 +264,13 @@ class Game {
     const sp = this.spawnPoint; this.addPickup('ammo', sp.x, sp.z - 12, 24, true);
   }
 
-  addPickup(kind, x, z, value, respawn) {
+  addPickup(kind, x, z, value, respawn, life = 30) {
     const m = kind === 'hp' ? new THREE.Mesh(this.hpGeo, this.hpMat)
       : kind === 'ammo' ? new THREE.Mesh(this.ammoGeo, this.ammoMat)
       : kind === 'armor' ? new THREE.Mesh(this.armorGeo, this.armorMat) : new THREE.Mesh(this.cashGeo, this.cashMat);
     m.position.set(x, 1, z);
     this.scene.add(m);
-    this.pickups.push({ kind, x, z, value, respawn, mesh: m, t: 0, life: respawn ? Infinity : 30 });
+    this.pickups.push({ kind, x, z, value, respawn, mesh: m, t: 0, life: respawn ? Infinity : life });
   }
 
   spawnCash(x, z, value, respawn = false) { this.addPickup('cash', x, z, value, respawn); }
@@ -544,11 +553,13 @@ class Game {
       this.camYaw = lerpAngle(this.camYaw, car.heading, Math.min(1, dt * 2.5));
       this.camPitch = lerp(this.camPitch, 0.25, Math.min(1, dt));
     }
-    const dist = car ? 9 + (car.type === 'van' ? 2 : 0) + Math.abs(car.speed) * 0.06 : 5.5;
+    const indoor = !!this.indoor;
+    if (indoor) this.camPitch = Math.max(this.camPitch, 0.95);
+    const dist = car ? 9 + (car.type === 'van' ? 2 : 0) + Math.abs(car.speed) * 0.06 : indoor ? 7 : 5.5;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
     const sx = Math.sin(this.camYaw), sz = Math.cos(this.camYaw);
     let d = dist;
-    for (let k = 1; k <= 12; k++) {
+    for (let k = 1; k <= 12 && !indoor; k++) {
       const t = k / 12 * dist;
       if (this.city.pointBlocked(tgt.x - sx * cp * t, tgt.y + sp * t, tgt.z - sz * cp * t)) { d = Math.max(1.5, (k - 1) / 12 * dist); break; }
     }
@@ -613,6 +624,7 @@ class Game {
     this.gangs.update(dt);
     this.weather.update(dt);
     this.shops.update(dt);
+    this.homes.update(dt);
     this.traffic.update(dt);
     this.police.update(dt);
     this.missions.update(dt);

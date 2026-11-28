@@ -221,7 +221,7 @@ export class Net {
         t: 's', x: +P.x.toFixed(2), y: +(c ? c.pos.y : p.pos.y).toFixed(2), z: +P.z.toFixed(2),
         f: +(c ? c.heading : p.facing).toFixed(3), car: c ? c.type : null,
         col: c ? c.bodyMat.color.getHex() : 0, vx: c ? +c.vel.x.toFixed(2) : 0, vz: c ? +c.vel.z.toFixed(2) : 0,
-        st: c ? c.steer : 0, gun: p.weapon === 'pistol' ? 1 : 0, dead: g.state !== 'play' ? 1 : 0, shop: g.shops.inside ? 1 : 0,
+        st: c ? c.steer : 0, gun: p.weapon === 'pistol' ? 1 : 0, dead: g.state !== 'play' ? 1 : 0, shop: g.indoor ? 1 : 0,
       });
     }
     if (this.isHost) { this.syncT -= dt; if (this.syncT <= 0) { this.syncT = 5; this.sendWorld(); } }

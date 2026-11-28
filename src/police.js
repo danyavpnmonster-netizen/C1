@@ -103,7 +103,7 @@ export class Police {
         } else {
           // погоня: при 1–2 звёздах бегут арестовать, с 3 — держат дистанцию и стреляют
           const hold = g.wanted >= 3 ? 9 : 1.1;
-          const canShoot = g.wanted >= 2 && g.state === 'play' && !g.shops.inside;
+          const canShoot = g.wanted >= 2 && g.state === 'play' && !g.indoor;
           if (d > hold && !(canShoot && d < 12 && g.wanted >= 3)) {
             const sp = pc ? 6.5 : 5.8;
             o.pos.x += dx / d * sp * dt; o.pos.z += dz / d * sp * dt;
@@ -177,7 +177,7 @@ export class Police {
     }
     // высадка: машина остановилась рядом с игроком
     const pc0 = g.player.car;
-    if (g.state === 'play' && !g.shops.inside && (!pc0 || Math.abs(pc0.speed) < 4)) {
+    if (g.state === 'play' && !g.indoor && (!pc0 || Math.abs(pc0.speed) < 4)) {
       for (const c of cops) {
         if (c.wrecked || c.copsOut || c.deployCd > 0) continue;
         const dd = Math.hypot(c.pos.x - P.x, c.pos.z - P.z);
@@ -218,7 +218,7 @@ export class Police {
     const pc = g.player.car;
     const pSpeed = pc ? Math.abs(pc.speed) : 0;
     const carBust = pc && nc && !nc.copsOut && Math.hypot(nc.pos.x - P.x, nc.pos.z - P.z) < 9 && Math.abs(nc.speed) < 6 && pSpeed < 3;
-    if (g.state === 'play' && !g.shops.inside && (carBust || arresting)) this.bustT += dt;
+    if (g.state === 'play' && !g.indoor && (carBust || arresting)) this.bustT += dt;
     else this.bustT = Math.max(0, this.bustT - dt * 1.5);
     if (this.bustT > 2.2) { this.bustT = 0; g.busted(); return; }
 

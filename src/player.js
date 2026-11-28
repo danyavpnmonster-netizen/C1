@@ -108,7 +108,7 @@ export class Player {
       if (inp.pressed('Digit2')) this.setWeapon('pistol');
       if (inp.pressed('KeyQ')) this.setWeapon(this.weapon === 'fists' ? 'pistol' : 'fists');
     }
-    const attack = playing && !g.shops.inside && (inp.clicked || inp.pressed('KeyE'));
+    const attack = playing && !g.indoor && (inp.clicked || inp.pressed('KeyE'));
     // выстрел
     this.shotCd -= dt;
     if (attack && this.weapon === 'pistol') {

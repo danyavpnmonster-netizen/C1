@@ -85,9 +85,10 @@ export class Shops {
     this.seller = makeHuman(0xf0f0f0, 0x333344, 0xc68642);
     this.seller.position.set(IX, 0, IZ + 3.8); this.seller.rotation.y = Math.PI;
     group.add(this.seller);
-    const light = new THREE.PointLight(0xfff2d8, 40, 25);
+    // один источник света на все интерьеры: переносится туда, куда зашёл игрок
+    const light = this.light = new THREE.PointLight(0xfff2d8, 40, 25);
     light.position.set(IX, 4, IZ);
-    group.add(light);
+    scene.add(light);
     scene.add(group);
   }
 
@@ -97,6 +98,7 @@ export class Shops {
     this.counterMat.color.setHex(s.color);
     this.wallMat.color.setHex(s.type === 'guns' ? 0xc8c0b0 : s.type === 'clothes' ? 0xf0e4f0 : 0xe8e0d0);
     p.pos.set(IX, 0, IZ - D / 2 + 2.6); p.facing = 0; p.vy = 0;
+    this.light.position.set(IX, 4, IZ);
     g.camYaw = 0; g.camPitch = 0.35;
     this.cd = 1;
     g.hud.message(SHOP_TYPES[s.type].name + ' — подойдите к прилавку', 2.5);

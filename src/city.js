@@ -76,6 +76,7 @@ export class City {
     this.wallMats = [];
     this.mats = {};
     this.shops = [];
+    this.doors = [];      // входы в дома и подъезды: {x, z, nx, nz, kind, id}
     this.build();
   }
 
@@ -227,8 +228,28 @@ export class City {
     }
   }
 
+  // Дверь на грани здания, обращённой к ближайшему краю квартала (к улице).
+  addDoor(x0, x1, z0, z1, blk, kind) {
+    const opts = [
+      [z0 - blk.z0, 0, -1], [blk.z1 - z1, 0, 1], [x0 - blk.x0, -1, 0], [blk.x1 - x1, 1, 0],
+    ].sort((a, b) => a[0] - b[0]);
+    const [, nx, nz] = opts[0];
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const fx = nx ? (nx > 0 ? x1 : x0) : cx, fz = nz ? (nz > 0 ? z1 : z0) : cz;
+    const door = new THREE.Mesh(this.unitBox, this.doorMat);
+    door.scale.set(nx ? 0.12 : 1.1, 2.1, nz ? 0.12 : 1.1);
+    door.position.set(fx + nx * 0.05, 1.05, fz + nz * 0.05);
+    this.scene.add(door);
+    const step = new THREE.Mesh(this.unitBox, this.roofMat);       // крыльцо
+    step.scale.set(nx ? 0.8 : 1.8, 0.15, nz ? 0.8 : 1.8);
+    step.position.set(fx + nx * 0.4, 0.07, fz + nz * 0.4);
+    step.receiveShadow = true;
+    this.scene.add(step);
+    this.doors.push({ x: fx + nx * 1.0, z: fz + nz * 1.0, nx, nz, kind, id: this.doors.length });
+  }
+
   // Частный дом с двускатной (четырёхскатной) крышей.
-  addHouse(x0, x1, z0, z1) {
+  addHouse(x0, x1, z0, z1, blk = null) {
     const h = 3.5 + rng() * 2.5;
     this.box(x0, x1, z0, z1, 0, h, 'house');
     const w = x1 - x0, d = z1 - z0;
@@ -238,6 +259,7 @@ export class City {
     roof.castShadow = true;
     this.scene.add(roof);
     this.addCollider(x0, x1, z0, z1, h + 2);
+    if (blk && rng() < 0.45) this.addDoor(x0, x1, z0, z1, blk, 'house');
   }
 
   // Магазин у тротуара с вывеской, витринами и дверью (вход с юга, сторона z0).
@@ -390,7 +412,7 @@ export class City {
           const px = lx0 + ix * cwid, pz = lz0 + iz * cdep;
           const hw = 4.5 + rng() * 2, hd = 4 + rng() * 2;
           const hx = px + cwid / 2 + (rng() - 0.5) * 2, hz = pz + cdep / 2 + (rng() - 0.5) * 2;
-          this.addHouse(hx - hw / 2, hx + hw / 2, hz - hd / 2, hz + hd / 2);
+          this.addHouse(hx - hw / 2, hx + hw / 2, hz - hd / 2, hz + hd / 2, blk);
           if (rng() < 0.5) addTree(px + 1.8, pz + 1.8, 0.8);
         }
         bushRows.push(blk);
@@ -415,6 +437,7 @@ export class City {
           sx0 += rng() * 2; sx1 -= rng() * 2; sz0 += rng() * 2; sz1 -= rng() * 2;
           const h = 8 + rng() * 16 + centre * centre * rng() * 80;
           this.addBuilding(sx0, sx1, sz0, sz1, h);
+          if (h < 26 && rng() < 0.35) this.addDoor(sx0, sx1, sz0, sz1, blk, 'flat');
         }
         // деревья на тротуаре
         if (rng() < 0.5) { addTree(cx, z0 + 0.9, 0.7); addTree(cx, z1 - 0.9, 0.7); }
@@ -438,7 +461,9 @@ export class City {
           if (Math.abs(t - mid) < 2.5) continue;                         // место дерева / прохода
           if (b.type === 'shop' && si === 0 && Math.abs(t - mid) < 11) continue;   // витрина магазина
           if (rng() < 0.25) continue;
-          bushes.push([...at(t), 0.8 + rng() * 0.5]);
+          const [bx, bz] = at(t);
+          if (this.doors.some((d) => Math.hypot(d.x - bx, d.z - bz) < 2.6)) continue;   // не загораживаем входы
+          bushes.push([bx, bz, 0.8 + rng() * 0.5]);
         }
       });
     }
