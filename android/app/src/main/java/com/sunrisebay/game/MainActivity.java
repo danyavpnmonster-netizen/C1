@@ -23,7 +23,7 @@ import java.util.HashMap;
 public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private WebView web;
-    private BtBridge bt;
+    private NetBridge net;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -60,8 +60,8 @@ public class MainActivity extends Activity {
             }
         });
 
-        bt = new BtBridge(this, web);
-        web.addJavascriptInterface(bt, "AndroidBT");
+        net = new NetBridge(this, web);
+        web.addJavascriptInterface(net, "AndroidNet");
         web.loadUrl("https://" + HOST + "/www/index.html");
         hideSystemUi();
     }
@@ -94,15 +94,6 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
-        super.onRequestPermissionsResult(code, perms, results);
-        if (code == BtBridge.PERM_REQUEST) {
-            boolean ok = results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            bt.onPermission(ok);
-        }
-    }
-
-    @Override
     protected void onPause() {
         super.onPause();
         web.onPause();
@@ -117,7 +108,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        bt.close();
+        net.shutdown();
         web.destroy();
         super.onDestroy();
     }

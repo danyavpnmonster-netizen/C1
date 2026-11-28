@@ -3,7 +3,7 @@ import { makeHuman, animateHuman } from './human.js';
 import { lerpAngle } from './config.js';
 
 // Игра вдвоём. Транспорт:
-//  • Bluetooth — в Android-приложении (мост window.AndroidBT из MainActivity);
+//  • Wi-Fi — в Android-приложении (мост window.AndroidNet: TCP + поиск игр в локальной сети);
 //  • local — две вкладки одного браузера (только для проверки, ?net=local).
 // Каждый играет в своём экземпляре одного и того же города; передаются
 // положение игрока, его машина и события (попадания, время суток, погода).
@@ -20,13 +20,20 @@ class LocalTransport {
       else if (m.kind === 'welcome' && this.waiting) this.up();
       else if (m.kind === 'msg' && this.connected) this.onEvent('msg', m.line);
       else if (m.kind === 'bye' && this.connected) { this.connected = false; this.onEvent('state', 'closed'); }
+      else if (m.kind === 'beacon' && this.scanning) this.onEvent('found', JSON.stringify([{ name: 'Другая вкладка', address: 'local' }]));
     };
   }
-  up() { this.waiting = false; this.connected = true; this.onEvent('state', 'connected'); this.onEvent('peer', 'Вкладка'); }
-  available() { return true; }
-  host() { this.waiting = true; this.onEvent('state', 'hosting'); }
+  up() { this.waiting = false; this.connected = true; this.onEvent('peer', 'Вкладка'); this.onEvent('state', 'connected'); }
+  online() { return true; }
+  myIp() { return '127.0.0.1'; }
+  games() { return '[]'; }
+  scan() { this.scanning = true; }
+  host() {
+    this.waiting = true; this.onEvent('state', 'hosting');
+    clearInterval(this.beacon);
+    this.beacon = setInterval(() => { if (this.waiting) this.ch.postMessage({ kind: 'beacon' }); else clearInterval(this.beacon); }, 500);
+  }
   connect() { this.waiting = true; this.onEvent('state', 'connecting'); this.ch.postMessage({ kind: 'hello' }); }
-  paired() { return JSON.stringify([{ name: 'Другая вкладка', address: 'local' }]); }
   send(line) { if (this.connected) this.ch.postMessage({ kind: 'msg', line }); }
   close() { if (this.connected) this.ch.postMessage({ kind: 'bye' }); this.connected = false; this.waiting = false; }
 }
@@ -38,7 +45,7 @@ export class Net {
     this.sendT = 0; this.syncT = 0;
     this.remote = null;       // {target, human, car, label}
     window.__bt = (type, data) => this.onEvent(type, data);
-    if (window.AndroidBT) this.t = window.AndroidBT;
+    if (window.AndroidNet) this.t = window.AndroidNet;
     else if (/[?&]net=local/.test(location.search)) this.t = new LocalTransport((a, b) => this.onEvent(a, b));
     else this.t = null;
     this.ui();
@@ -54,44 +61,48 @@ export class Net {
     document.getElementById('netbtn').addEventListener('click', (e) => { e.stopPropagation(); this.open(); });
     document.getElementById('nethost').addEventListener('click', () => this.host());
     document.getElementById('netback').addEventListener('click', () => { this.close(); this.panel.style.display = 'none'; });
+    document.getElementById('netgo').addEventListener('click', () => {
+      const ip = document.getElementById('netip').value.trim();
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) this.connect(ip);
+      else this.say('Введите адрес вида 192.168.1.23 — его видно на экране того, кто создал игру.');
+    });
   }
 
   open() {
     this.panel.style.display = 'flex';
     if (!this.t) {
-      this.say('Игра по Bluetooth работает в Android-приложении Sunrise Bay (файл APK). В браузере телефоны так соединяться не умеют.');
+      this.say('Игра вдвоём по Wi-Fi работает в Android-приложении Sunrise Bay (файл APK). Браузер не умеет напрямую соединять телефоны.');
       document.getElementById('nethost').disabled = true;
+      document.getElementById('netmanual').style.display = 'none';
       return;
     }
-    if (window.AndroidBT && !this.permAsked) { this.permAsked = true; this.t.requestPermission(); }
-    this.refresh();
+    if (!this.t.online()) {
+      this.say('Телефон не подключён к Wi-Fi. Подключите оба телефона к одной сети Wi-Fi (или включите точку доступа на одном и подключите к ней второй).');
+    } else {
+      this.say('Оба телефона должны быть в одной сети Wi-Fi. Один нажимает «Создать игру», второй — выбирает игру в списке.');
+    }
+    this.t.scan();
+    this.shownGames = null;
+    this.showGames([]);
   }
 
-  refresh() {
-    if (window.AndroidBT && !this.t.enabled()) {
-      this.say('Bluetooth выключен. Включите его и нажмите «Обновить».');
-      this.list.innerHTML = '<button id="netenable">Включить Bluetooth</button><button id="netrefresh">Обновить</button>';
-      document.getElementById('netenable').onclick = () => this.t.enable();
-      document.getElementById('netrefresh').onclick = () => this.refresh();
-      return;
-    }
-    let devices = [];
-    try { devices = JSON.parse(this.t.paired() || '[]'); } catch (e) { devices = []; }
+  showGames(games) {
+    const key = JSON.stringify(games);
+    if (key === this.shownGames) return;        // не перерисовываем — кнопка не «уедет» из-под пальца
+    this.shownGames = key;
     this.list.innerHTML = '';
-    if (!devices.length) {
-      this.say('Нет сопряжённых устройств. Сначала соедините телефоны в настройках Bluetooth (Настройки → Bluetooth → новое устройство), затем вернитесь сюда.');
-    } else if (this.state === 'idle' || this.state === 'closed' || this.state === 'error') {
-      this.say('Один игрок нажимает «Создать игру», второй — выбирает его телефон в списке.');
+    if (!games.length) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = 'Ищем игры в сети…';
+      this.list.append(p);
     }
-    for (const d of devices) {
+    for (const gm of games) {
       const b = document.createElement('button');
-      b.textContent = 'Подключиться: ' + (d.name || d.address);
-      b.onclick = () => this.connect(d.address);
+      b.textContent = 'Подключиться: ' + (gm.name || gm.address) + '  (' + gm.address + ')';
+      b.onclick = () => this.connect(gm.address);
       this.list.append(b);
     }
-    const r = document.createElement('button');
-    r.textContent = 'Обновить список'; r.onclick = () => this.refresh();
-    this.list.append(r);
   }
 
   say(t) { this.status.textContent = t; }
@@ -104,7 +115,10 @@ export class Net {
     const g = this.game;
     if (type === 'state') {
       this.state = data;
-      if (data === 'hosting') this.say('Ждём второго игрока… Попросите его выбрать ваш телефон в списке.');
+      if (data === 'hosting') {
+        const ip = this.t.myIp ? this.t.myIp() : '';
+        this.say('Игра создана, ждём второго игрока… Ваш адрес: ' + (ip || 'нет сети') + '. Второй игрок увидит игру в списке или введёт этот адрес.');
+      }
       if (data === 'connecting') this.say('Подключаемся…');
       if (data === 'connected') {
         this.say('Соединено!');
@@ -122,10 +136,11 @@ export class Net {
       this.peer = data || 'Игрок 2';
     } else if (type === 'error') {
       this.state = 'error';
-      this.say('Не удалось соединиться: ' + (data || 'ошибка') + '. Проверьте, что Bluetooth включён и телефоны сопряжены.');
-    } else if (type === 'perm') {
-      if (data !== 'ok') this.say('Нужно разрешение «Устройства поблизости» — без него Bluetooth недоступен.');
-      else this.refresh();
+      this.say('Не удалось соединиться: ' + (data || 'ошибка') + '. Проверьте, что оба телефона в одной сети Wi-Fi.');
+    } else if (type === 'found') {
+      let games = [];
+      try { games = JSON.parse(data || '[]'); } catch (e) { games = []; }
+      if (this.state !== 'connected') this.showGames(games);
     } else if (type === 'msg') {
       let m; try { m = JSON.parse(data); } catch (e) { return; }
       this.onMessage(m);

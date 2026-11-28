@@ -69,6 +69,11 @@
   #netpanel button:disabled { opacity: .4; }
   #netpanel button.main { background: #ff9a2e; color: #1a1000; font-weight: bold; text-align: center; }
   #netlist { display: flex; flex-direction: column; gap: 8px; }
+  #netlist .hint { opacity: .7; font-size: 14px; }
+  #netmanual { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #netmanual label { width: 100%; font-size: 14px; opacity: .8; }
+  #netmanual input { flex: 1; min-width: 0; padding: 10px; border-radius: 8px; border: 1px solid #ff9a2e; background: #0a1024; color: #fff; font: 16px ui-monospace, monospace; }
+  #netmanual input:focus-visible { outline: 2px solid #fff; }
   #start .go small { font-size: 12px; font-weight: normal; opacity: .8; }
   #start .go:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   #testpanel { position: fixed; top: 60px; left: 16px; display: none; z-index: 6; max-width: calc(100vw - 32px); }
@@ -134,10 +139,11 @@
 <div id="shop"></div>
 <div id="netpanel">
   <div class="box">
-    <h2>Игра вдвоём по Bluetooth</h2>
-    <p id="netstatus">Один игрок нажимает «Создать игру», второй — выбирает его телефон в списке.</p>
+    <h2>Игра вдвоём по Wi-Fi</h2>
+    <p id="netstatus">Оба телефона должны быть в одной сети Wi-Fi. Один нажимает «Создать игру», второй — выбирает игру в списке.</p>
     <button id="nethost" class="main">Создать игру</button>
     <div id="netlist"></div>
+    <div id="netmanual"><label for="netip">Или адрес вручную:</label><input id="netip" inputmode="decimal" placeholder="192.168.1.23" autocomplete="off"><button id="netgo">Подключиться</button></div>
     <button id="netback">Назад</button>
   </div>
 </div>
@@ -182,7 +188,7 @@
     <div class="gos">
       <button id="play" class="go">ИГРАТЬ</button>
       <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
-      <button id="netbtn" class="go net">ВДВОЁМ<small>по Bluetooth</small></button>
+      <button id="netbtn" class="go net">ВДВОЁМ<small>по Wi-Fi</small></button>
     </div>
   </div>
 </div>
