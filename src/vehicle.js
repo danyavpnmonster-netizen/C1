@@ -46,8 +46,11 @@ for (const T of Object.values(CAR_TYPES)) {
   T.power = T.mass * T.accel * T.max * 0.35;   // мощность (Вт): выше 35% Vmax тяга ограничена мощностью
   T.crr = T.mass * 0.012;                      // качение (Н·с/м)
   T.cd = (T.power / T.max - T.crr * T.max) / (T.max * T.max);   // воздух: на Vmax тяга = сопротивление
+  // Устойчивость: шины жёстче и цепче, чем в «чистой» модели, — занос примерно вдвое меньше.
+  T.cs *= 1.25;
+  T.mu *= 1.05;
   T.csR = T.cs * 1.3;                          // задние шины жёстче — машина слегка недоворачивает
-  T.muR = 1.06;                                // и держат чуть лучше
+  T.muR = 1.08;                                // и держат чуть лучше
 }
 const G = 9.81;
 
@@ -185,7 +188,7 @@ export class Car {
     let Fyr = -T.csR * Nr * alphaR;
     let sf, sr;
     [Fxf, Fyf, sf] = friction(Fxf, Fyf, mu * Nf);
-    [Fxr, Fyr, sr] = friction(Fxr, Fyr, mu * T.muR * Nr * (c.handbrake ? 0.55 : 1));
+    [Fxr, Fyr, sr] = friction(Fxr, Fyr, mu * T.muR * Nr * (c.handbrake ? 0.8 : 1));
     // пробуксовка: двигатель «перекрутил» колёса
     this.wheelSpin = drive > 0 && Math.abs(drive) > mu * Nr * 0.95 ? 1 : 0;
     this.skid = Math.max(sf, sr, this.wheelSpin * 0.6, Math.min(1, Math.abs(vy) / 6));
@@ -204,13 +207,19 @@ export class Car {
     this.yawRate += torque / T.I * h;
     // система стабилизации: вращение не быстрее, чем шины способны удержать
     // (на ручнике отключается — можно дрифтовать)
+    if (c.handbrake && speed > 4 && !(this.escOff > 0)) {
+      // на ручнике занос разрешён, но вполовину слабее: гасим вращение сверх 35°
+      const beta = Math.atan2(vy, Math.abs(vx));
+      if (Math.abs(beta) > 0.6) this.yawRate += Math.sign(beta) * (Math.abs(beta) - 0.6) * h * 6;
+      this.yawRate *= 1 - Math.min(1, h * 0.5);
+    }
     if (!c.handbrake && speed > 4 && !(this.escOff > 0)) {
-      const rMax = mu * G * 1.1 / speed + 0.15;
+      const rMax = mu * G * 1.0 / speed + 0.1;
       const ex = Math.abs(this.yawRate) - rMax;
       if (ex > 0) this.yawRate -= Math.sign(this.yawRate) * ex * Math.min(1, h * 10);
       // гасим занос: разворачиваем кузов к направлению движения
       const beta = Math.atan2(vy, Math.abs(vx));
-      if (Math.abs(beta) > 0.2 && vx > 3) this.yawRate += Math.sign(beta) * (Math.abs(beta) - 0.2) * h * 6;
+      if (Math.abs(beta) > 0.1 && vx > 3) this.yawRate += Math.sign(beta) * (Math.abs(beta) - 0.1) * h * 14;
     }
     this.axLong += (ax - this.axLong) * Math.min(1, h * 8);
     this.ayLat += (ay - this.ayLat) * Math.min(1, h * 8);

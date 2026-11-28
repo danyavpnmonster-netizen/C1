@@ -16,6 +16,8 @@ function spotFrom(P, minD, maxD) {
   }
   return roadSpot();
 }
+// запас времени на каждое задание (секунды)
+const EXTRA_TIME = 30;
 const D = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 const COLUMN = new THREE.CylinderGeometry(1, 1, 1, 24, 1, true);
@@ -64,13 +66,13 @@ export class Missions {
     let m;
     if (giver.type === 'courier') {
       const A = spotFrom(P, 100, 250), B = spotFrom(A, 200, 400);
-      m = { title: 'Курьер', reward: 400, time: (D(P, A) + D(A, B)) / 11 + 25, stages: [
+      m = { title: 'Курьер', reward: 400, time: (D(P, A) + D(A, B)) / 11 + 25 + EXTRA_TIME, stages: [
         { pos: A, text: 'Забери посылку', r: 4 },
         { pos: B, text: 'Доставь посылку', r: 5, stop: true },
       ] };
     } else if (giver.type === 'taxi') {
       const A = spotFrom(P, 80, 200), B = spotFrom(A, 200, 450);
-      m = { title: 'Такси', reward: 250, bonus: 6, time: (D(P, A) + D(A, B)) / 12 + 25, needCar: true, stages: [
+      m = { title: 'Такси', reward: 250, bonus: 6, time: (D(P, A) + D(A, B)) / 12 + 25 + EXTRA_TIME, needCar: true, stages: [
         { pos: A, text: 'Подбери пассажира', r: 6, stop: true, pickup: true },
         { pos: B, text: 'Отвези пассажира', r: 6, stop: true },
       ] };
@@ -83,14 +85,14 @@ export class Missions {
       const car = g.addCar(pick(['sport', 'van', 'taxi']), A.x, A.z, A.h);
       car.role = 'parked'; car.keep = true;
       car.bodyMat.color.setHex(0xaa55ff);
-      m = { title: 'Угон на заказ', reward: 700, bonus: 5, time: (D(P, A) + D(A, B)) / 11 + 40, car, stages: [
+      m = { title: 'Угон на заказ', reward: 700, bonus: 5, time: (D(P, A) + D(A, B)) / 11 + 40 + EXTRA_TIME, car, stages: [
         { pos: { x: A.x, z: A.z }, text: `Угони фиолетовую машину (${car.T.name})`, r: 3, car },
         { pos: B, text: 'Пригони машину заказчику', r: 6, stop: true, needThis: car },
       ] };
     } else {
       const pts = []; let prev = P, total = 0;
       for (let k = 0; k < 6; k++) { const s = spotFrom(prev, 90, 170); total += D(prev, s); pts.push(s); prev = s; }
-      m = { title: 'Гонка', reward: 600, bonus: 12, time: total / 15 + 12, needCar: true,
+      m = { title: 'Гонка', reward: 600, bonus: 12, time: total / 15 + 12 + EXTRA_TIME, needCar: true,
         stages: pts.map((pos, k) => ({ pos, text: `Чекпоинт ${k + 1}/6`, r: 7 })) };
     }
     m.idx = 0; m.giver = giver;
