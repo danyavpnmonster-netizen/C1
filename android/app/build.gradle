@@ -1,0 +1,56 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Игра — это веб-страница из корня репозитория (index.html, src/, vendor/).
+// При сборке она копируется в assets/www, а Three.js берётся локально, без интернета.
+def webOut = layout.buildDirectory.dir('webassets')
+
+tasks.register('copyWeb', Copy) {
+    from(rootProject.file('..')) {
+        include 'index.html', 'src/**', 'vendor/**'
+    }
+    into webOut.map { it.dir('www') }
+    filesMatching('index.html') {
+        filter { String line ->
+            line.replace('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', './vendor/three.module.min.js')
+        }
+    }
+}
+
+android {
+    namespace 'com.sunrisebay.game'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.sunrisebay.game'
+        minSdk 24
+        targetSdk 34
+        versionCode 5
+        versionName '0.10'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // подпись отладочным ключом: APK можно сразу установить на телефон
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main { assets.srcDirs += [webOut] }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+tasks.named('preBuild') { dependsOn 'copyWeb' }

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sunrise Bay</title>
+<style>
+  :root { --hud: #fff; --accent: #ffcc33; --panel: rgba(0,0,0,0.45); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a1028; font-family: "Trebuchet MS", system-ui, sans-serif; color: var(--hud); user-select: none; -webkit-user-select: none; touch-action: none; }
+  #game { display: block; width: 100vw; height: 100vh; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 3px #000, 0 0 2px #000; }
+  #topright { top: 14px; right: 16px; text-align: right; }
+  #clock { font-size: 26px; font-weight: bold; }
+  #money { font-size: 30px; font-weight: bold; color: #7dff7d; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+  #stars { font-size: 28px; letter-spacing: 2px; }
+  .st { color: rgba(0,0,0,0.45); -webkit-text-stroke: 1px #ddd; }
+  .st.on { color: #fff; } .st.dim { color: #888; }
+  #hpbar { width: 160px; height: 10px; background: rgba(0,0,0,0.6); border: 2px solid #000; margin: 6px 0 0 auto; }
+  #hpfill { height: 100%; width: 100%; background: linear-gradient(#ff6b6b, #c0392b); transition: width .2s; }
+  #armorbar { width: 160px; height: 8px; background: rgba(0,0,0,0.6); border: 2px solid #000; margin: 6px 0 0 auto; display: none; }
+  #armorfill { height: 100%; width: 0; background: linear-gradient(#9fd0ff, #3a7bff); transition: width .2s; }
+  #minimap { position: fixed; left: 16px; bottom: 16px; width: 190px; height: 190px; pointer-events: none; }
+  #speed { bottom: 22px; right: 22px; font-size: 38px; font-weight: bold; display: none; text-align: right; }
+  #speed small { font-size: 16px; }
+  .carhp { width: 120px; height: 6px; background: rgba(0,0,0,.6); margin-left: auto; }
+  .carhp i { display: block; height: 100%; background: #f5b041; }
+  .carhp.nitro { margin-top: 4px; } .carhp.nitro i { background: #4fc3ff; }
+  #weapon { font-size: 24px; margin-top: 4px; } #weapon small { font-size: 14px; opacity: .8; }
+  #bigmap { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; z-index: 8; border: 3px solid #000; border-radius: 8px; box-shadow: 0 10px 40px #000; pointer-events: none; }
+  #carname { bottom: 86px; right: 22px; font-size: 16px; opacity: .85; }
+  #mission { top: 14px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 6px 14px; border-radius: 6px; font-size: 18px; display: none; max-width: 70vw; text-align: center; }
+  #timer { top: 52px; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: bold; }
+  #arrowWrap { top: 92px; left: 50%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; }
+  #arrow { width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 30px solid var(--accent); filter: drop-shadow(0 2px 2px #000); }
+  #dist { font-size: 14px; margin-top: 2px; }
+  #msg { bottom: 230px; left: 50%; transform: translateX(-50%); font-size: 22px; transition: opacity .4s; opacity: 0; text-align: center; white-space: nowrap; }
+  #big { top: 34%; left: 50%; transform: translateX(-50%); font-size: 54px; font-weight: 900; color: var(--accent); white-space: pre; text-align: center; opacity: 0; transition: opacity .5s; letter-spacing: 2px; -webkit-text-stroke: 2px #000; }
+  #hitflash { inset: 0; background: #ff0000; opacity: 0; transition: opacity .15s; }
+  #bustwrap { top: 40%; left: 50%; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(0,0,0,.6); display: none; border: 2px solid #000; }
+  #bust { height: 100%; width: 0; background: #3a7bff; }
+  #shop { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); width: min(320px, calc(100vw - 32px)); background: rgba(10,14,28,.88); border: 2px solid var(--accent); border-radius: 10px; padding: 12px; display: none; z-index: 7; }
+  #shop h3 { margin: 0 0 8px; color: var(--accent); letter-spacing: 1px; }
+  #shop button { display: flex; align-items: center; gap: 10px; width: 100%; margin: 6px 0; padding: 8px 10px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); border-radius: 8px; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+  #shop button:hover, #shop button:active { background: rgba(255,204,51,.25); }
+  #shop button b { color: var(--accent); }
+  #shop button span { flex: 1; display: flex; flex-direction: column; }
+  #shop button small { opacity: .7; font-size: 12px; }
+  #shop button em { font-style: normal; color: #7dff7d; font-weight: bold; }
+  #shop p { margin: 6px 0 0; font-size: 12px; opacity: .7; }
+  #help { top: 14px; left: 16px; font-size: 12px; line-height: 1.5; opacity: .8; }
+  body.touch #help { display: none; }
+
+  #start { position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center; overflow-y: auto; touch-action: pan-y; background: radial-gradient(ellipse at center, rgba(10,16,40,.55), rgba(10,16,40,.92)); cursor: pointer; z-index: 10; padding: 16px; }
+  #start .card { max-width: 560px; text-align: center; }
+  #start h1 { font-size: clamp(40px, 9vw, 76px); margin: 0; color: var(--accent); letter-spacing: 4px; -webkit-text-stroke: 2px #000; text-shadow: 0 6px 0 #c0392b, 0 10px 20px #000; font-style: italic; }
+  #start p { opacity: .9; line-height: 1.5; }
+  #start { cursor: default; }
+  #start .gos { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  #start .go { display: inline-flex; flex-direction: column; align-items: center; padding: 12px 28px; border: 3px solid var(--accent); border-radius: 8px; font: bold 22px "Trebuchet MS", system-ui, sans-serif; color: #fff; background: rgba(0,0,0,.35); cursor: pointer; }
+  #start .go:not(.test) { animation: pulse 1.4s infinite; }
+  #start .go.test { border-color: #4fc3ff; }
+  #start .go.net { border-color: #ff9a2e; }
+  #start .go.set { border-color: #ffcc33; padding-left: 18px; padding-right: 18px; }
+  #netpanel { position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; background: rgba(5,10,24,.9); padding: 16px; overflow-y: auto; }
+  #netpanel .box { width: min(460px, 100%); background: #0f1830; border: 2px solid #ff9a2e; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  #netpanel h2 { margin: 0; color: #ff9a2e; font-size: 22px; }
+  #netpanel p { margin: 0; line-height: 1.45; }
+  #netpanel button { padding: 11px 14px; border-radius: 8px; border: 1px solid #ff9a2e; background: rgba(255,154,46,.12); color: #fff; font: 16px "Trebuchet MS", system-ui, sans-serif; cursor: pointer; text-align: left; }
+  #netpanel button:disabled { opacity: .4; }
+  #netpanel button.main { background: #ff9a2e; color: #1a1000; font-weight: bold; text-align: center; }
+  #netlist { display: flex; flex-direction: column; gap: 8px; }
+  #netpanel .server { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid rgba(255,154,46,.5); border-radius: 10px; background: rgba(255,154,46,.08); }
+  #netpanel .sv-icon { font-size: 26px; }
+  #netpanel .sv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #netpanel .sv-info small { opacity: .75; font-size: 13px; }
+  #netpanel .sv-count { font: bold 16px ui-monospace, monospace; color: #ffd08a; }
+  #netpanel .server button { padding: 10px 16px; }
+  #netpanel .netrow { display: flex; align-items: center; gap: 8px; }
+  #netpanel .netrow label { font-size: 14px; opacity: .8; }
+  #netpanel .netrow input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid #ff9a2e; background: #0a1024; color: #fff; font: 16px "Trebuchet MS", sans-serif; }
+  #hudnet { position: fixed; left: 16px; bottom: 214px; z-index: 6; display: none; padding: 6px 12px; border-radius: 16px; border: 1px solid #ff9a2e; background: rgba(0,0,0,.5); color: #fff; font: 14px "Trebuchet MS", sans-serif; cursor: pointer; }
+  body.playing #hudnet { display: block; }
+  body.online #hudnet { background: rgba(255,154,46,.45); }
+  body.touch #hudnet { left: 12px; top: 138px; bottom: auto; }
+  #netlist .hint { opacity: .7; font-size: 14px; }
+  #netmanual { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #netmanual label { width: 100%; font-size: 14px; opacity: .8; }
+  #netmanual input { flex: 1; min-width: 0; padding: 10px; border-radius: 8px; border: 1px solid #ff9a2e; background: #0a1024; color: #fff; font: 16px ui-monospace, monospace; }
+  #netmanual input:focus-visible { outline: 2px solid #fff; }
+  #start .go small { font-size: 12px; font-weight: normal; opacity: .8; }
+  #start .go:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  #testpanel { position: fixed; top: 60px; left: 16px; display: none; z-index: 6; max-width: calc(100vw - 32px); }
+  #tele { margin: 0; padding: 8px 10px; background: rgba(5,10,24,.78); border: 1px solid #4fc3ff; border-radius: 8px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre; color: #dff4ff; pointer-events: none; }
+  #testbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-width: 360px; }
+  #testbtns button { padding: 6px 9px; background: rgba(5,10,24,.78); border: 1px solid #4fc3ff; border-radius: 6px; color: #fff; font: 13px "Trebuchet MS", system-ui, sans-serif; cursor: pointer; }
+  #testbtns button small { margin-left: 5px; color: #4fc3ff; font-size: 11px; }
+  #testbtns button:active { background: rgba(79,195,255,.35); }
+  body.testmode #help { display: none; }
+  body.touch #testpanel { top: 8px; left: 142px; right: 250px; max-width: none; }
+  body.touch #tele { font-size: 9px; line-height: 1.3; columns: 2; column-gap: 14px; padding: 5px 8px; }
+  body.touch #testbtns { max-width: none; gap: 4px; margin-top: 5px; }
+  body.touch #testbtns button { padding: 4px 6px; font-size: 11px; }
+  body.touch #testbtns button small { display: none; }
+  @media (max-width: 700px) { body.touch #testpanel { left: 8px; right: 8px; top: 150px; } }
+  #start table { margin: 12px auto 0; font-size: 14px; text-align: left; border-spacing: 12px 3px; }
+  #start td:first-child { color: var(--accent); font-weight: bold; white-space: nowrap; }
+  body.touch #start table { display: none; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+  @media (max-height: 520px) {
+    #start h1 { font-size: 40px; }
+    #start p { font-size: 13px; margin: 8px 0; }
+    #start .legend { display: none; }
+    #start .gos { flex-wrap: nowrap; gap: 10px; margin-top: 8px; }
+    #start .go { padding: 8px 16px; font-size: 18px; }
+  }
+
+  #touch { display: none; }
+  body.touch #touch { display: block; }
+  #touch .tbtn, #joy { opacity: var(--tb-opacity, .85); }
+  #joy { position: fixed; left: 24px; bottom: 24px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.35); z-index: 5; }
+  #knob { position: absolute; left: 31%; top: 31%; width: 38%; height: 38%; border-radius: 50%; background: rgba(255,255,255,.5); }
+  /* настройка кнопок */
+  body.editing #touch { display: block; }
+  body.editing:not(.editcar) .tbtn.foot, body.editing.editcar .tbtn.car { display: flex !important; }
+  body.editing:not(.editcar) .tbtn.car, body.editing.editcar .tbtn.foot { display: none !important; }
+  body.editing #touch .tbtn, body.editing #joy { opacity: 1; outline: 2px dashed rgba(255,255,255,.7); outline-offset: 3px; touch-action: none; cursor: grab; }
+  body.editing #touch .sel { outline: 3px solid #ffcc33; box-shadow: 0 0 18px #ffcc33; }
+  body.editing::before { content: ""; position: fixed; inset: 0; background: rgba(5,10,24,.55); z-index: 4; }
+  #edittools { position: fixed; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 13; display: none; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;
+    width: min(620px, calc(100vw - 24px)); padding: 10px; border-radius: 12px; background: #0f1830; border: 2px solid #ffcc33; color: #fff; font: 14px "Trebuchet MS", sans-serif; }
+  #edittools p { margin: 0; width: 100%; text-align: center; opacity: .85; }
+  #edittools b { color: #ffcc33; min-width: 90px; text-align: center; }
+  #edittools button { padding: 8px 14px; border-radius: 8px; border: 1px solid #ffcc33; background: rgba(255,204,51,.12); color: #fff; font: inherit; cursor: pointer; }
+  #edittools button.main { background: #ffcc33; color: #1a1000; font-weight: bold; }
+  #setpanel { position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; background: rgba(5,10,24,.9); padding: 16px; overflow-y: auto; }
+  #setpanel .box { width: min(440px, 100%); background: #0f1830; border: 2px solid #ffcc33; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: #fff; }
+  #setpanel h2 { margin: 0; color: #ffcc33; }
+  #setpanel label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  #setpanel input[type=range] { width: 100%; accent-color: #ffcc33; }
+  #setpanel button { padding: 11px 14px; border-radius: 8px; border: 1px solid #ffcc33; background: rgba(255,204,51,.12); color: #fff; font: 16px "Trebuchet MS", sans-serif; cursor: pointer; }
+  #setpanel button.main { background: #ffcc33; color: #1a1000; font-weight: bold; }
+  #setpanel .note { font-size: 13px; opacity: .7; margin: 0; }
+  #hudset { position: fixed; left: 136px; bottom: 214px; z-index: 6; display: none; padding: 6px 10px; border-radius: 16px; border: 1px solid #ffcc33; background: rgba(0,0,0,.5); color: #fff; font: 14px "Trebuchet MS", sans-serif; cursor: pointer; }
+  body.playing #hudset { display: block; }
+  body.touch #hudset { left: 132px; top: 138px; bottom: auto; }
+  .tbtn { position: fixed; width: 66px; height: 66px; border-radius: 50%; background: rgba(0,0,0,.4); border: 2px solid rgba(255,255,255,.5); color: #fff; font-size: 15px; text-align: center; line-height: 1.1; font-weight: bold; display: flex; align-items: center; justify-content: center; z-index: 5; }
+  .tbtn.on { background: rgba(255,204,51,.6); }
+  .tbtn.big { width: 84px; height: 84px; font-size: 17px; }
+  .tbtn.gas { background: rgba(46,158,91,.55); border-color: #7dff9a; }
+  .tbtn.brake { background: rgba(180,40,40,.5); border-color: #ff8a8a; font-size: 12px; }
+  .tbtn.gas.on { background: rgba(125,255,154,.75); } .tbtn.brake.on { background: rgba(255,120,120,.75); }
+  body:not(.incar) .tbtn.car, body.incar .tbtn.foot { display: none; }
+  body.touch #speed { right: auto; left: 50%; transform: translateX(-50%); bottom: 10px; text-align: center; font-size: 30px; }
+  body.touch .carhp { margin: 0 auto; }
+  body.touch #carname { display: none; }
+  body.touch #minimap { top: 12px; left: 12px; bottom: auto; width: 120px; height: 120px; }
+  body.touch #msg { bottom: 110px; font-size: 18px; }
+  @media (max-width: 600px) { #minimap { width: 140px; height: 140px; } #big { font-size: 34px; } #money { font-size: 22px; } #clock { font-size: 18px; } #stars { font-size: 20px; } #hpbar, #armorbar { width: 110px; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hitflash" class="hud"></div>
+<div id="topright" class="hud">
+  <div id="clock">09:00</div>
+  <div id="money">$00000000</div>
+  <div id="armorbar" class="bar"><div id="armorfill"></div></div>
+  <div id="hpbar"><div id="hpfill"></div></div>
+  <div id="stars"></div>
+  <div id="weapon">👊</div>
+</div>
+<div id="help" class="hud">
+  WASD — ходьба / руль · Shift — бег / нитро · Пробел — прыжок / ручник<br>
+  F — сесть/выйти · ЛКМ или E — удар/выстрел · Q — оружие · M — карта · O — серверы · H — сигнал
+</div>
+<canvas id="minimap" width="190" height="190"></canvas>
+<canvas id="bigmap"></canvas>
+<div id="shop"></div>
+<button id="hudnet">🌐 Серверы</button>
+<button id="hudset">⚙ Кнопки</button>
+<div id="setpanel">
+  <div class="box">
+    <h2>Настройки управления</h2>
+    <button id="setedit" class="main">Настроить расположение кнопок</button>
+    <label>Прозрачность кнопок <input id="setopacity" type="range" min="0.3" max="1" step="0.05"></label>
+    <label>Размер всех кнопок <input id="setsize" type="range" min="0.7" max="1.5" step="0.05"></label>
+    <label>Чувствительность обзора (свайп по экрану) <input id="setlook" type="range" min="0.4" max="2.5" step="0.1"></label>
+    <button id="setreset">Сбросить всё по умолчанию</button>
+    <p class="note">Настройки сохраняются на этом устройстве.</p>
+    <button id="setclose">Закрыть</button>
+  </div>
+</div>
+<div id="edittools">
+  <p>Перетаскивайте кнопки пальцем. Нажмите на кнопку, чтобы выбрать её и изменить размер.</p>
+  <button id="editmode">Сейчас: пешком → в машине</button>
+  <button id="editminus" aria-label="Меньше">−</button><b id="editsel">—</b><button id="editplus" aria-label="Больше">+</button>
+  <button id="editreset">Вернуть места</button><button id="editdone" class="main">Готово</button>
+</div>
+<div id="netpanel">
+  <div class="box">
+    <h2>Серверы</h2>
+    <p id="netstatus">Все игроки должны быть в одной сети Wi-Fi.</p>
+    <div class="netrow"><label for="netnick">Ваш ник:</label><input id="netnick" maxlength="14" autocomplete="off"></div>
+    <div id="netlist"></div>
+    <div id="netmanual"><label for="netip">Сервер по адресу:</label><input id="netip" inputmode="decimal" placeholder="192.168.1.23" autocomplete="off"><button id="netgo">Подключиться</button></div>
+    <button id="netback">Закрыть</button>
+  </div>
+</div>
+<div id="testpanel"><pre id="tele"></pre><div id="testbtns"></div></div>
+<div id="mission" class="hud"></div>
+<div id="timer" class="hud"></div>
+<div id="arrowWrap" class="hud"><div id="arrow"></div><div id="dist"></div></div>
+<div id="msg" class="hud"></div>
+<div id="big" class="hud"></div>
+<div id="bustwrap" class="hud"><div id="bust"></div></div>
+<div id="speed" class="hud"></div>
+<div id="carname" class="hud"></div>
+
+<div id="touch">
+  <div id="joy"><div id="knob"></div></div>
+  <!-- foot — только пешком, car — только в машине, без класса — всегда -->
+  <div class="tbtn car big gas" data-code="Gas" style="right:16px;bottom:16px">ГАЗ</div>
+  <div class="tbtn car brake" data-code="Brake" style="right:112px;bottom:16px">ТОРМОЗ</div>
+  <div class="tbtn foot" data-code="KeyE" style="right:104px;bottom:20px">Удар</div>
+  <div class="tbtn" data-code="Space" data-foot="⤒" data-car="Ручник" style="right:20px;bottom:110px">⤒</div>
+  <div class="tbtn" data-code="ShiftLeft" data-foot="Бег" data-car="N₂O" style="right:104px;bottom:104px">Бег</div>
+  <div class="tbtn foot" data-code="KeyQ" style="right:188px;bottom:104px">🔫</div>
+  <div class="tbtn" data-code="KeyF" style="right:20px;bottom:186px">F</div>
+  <div class="tbtn" data-code="KeyH" style="right:196px;bottom:20px">♪</div>
+  <div class="tbtn" data-code="KeyM" style="right:104px;bottom:186px">🗺</div>
+</div>
+
+<div id="start">
+  <div class="card">
+    <h1>SUNRISE BAY</h1>
+    <p>Открытый город у океана. Угоняйте машины, выполняйте задания, уходите от полиции и прыгайте с трамплинов в парках.</p>
+    <table>
+      <tr><td>W A S D</td><td>движение / газ, тормоз, руль</td></tr>
+      <tr><td>Мышь</td><td>камера (клик — захват курсора)</td></tr>
+      <tr><td>F</td><td>сесть в машину / выйти (угон)</td></tr>
+      <tr><td>Пробел</td><td>прыжок / ручной тормоз</td></tr>
+      <tr><td>ЛКМ, E</td><td>удар</td></tr>
+      <tr><td>ЛКМ, E</td><td>с пистолетом — выстрел (патроны — синие ящики)</td></tr>
+      <tr><td>Q, 1, 2</td><td>сменить оружие</td></tr>
+      <tr><td>Shift</td><td>бег; в машине — нитро</td></tr>
+      <tr><td>M / H</td><td>большая карта / сигнал</td></tr>
+    </table>
+    <p class="legend">На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!), жёлтые кольца у дверей — входы в магазины,
+      <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
+    <div class="gos">
+      <button id="play" class="go">ИГРАТЬ</button>
+      <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
+      <button id="netbtn" class="go net">СЕРВЕРЫ<small>игра по Wi-Fi</small></button>
+      <button id="setbtn" class="go set">⚙<small>кнопки</small></button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
