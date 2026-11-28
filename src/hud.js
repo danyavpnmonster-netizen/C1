@@ -32,15 +32,32 @@ export class Hud {
       x.fillStyle = col; x.fillRect(u0, v0, u1 - u0, v1 - v0);
     };
     rect(-LAND, -LAND, LAND, LAND, '#d9c58f');
-    const ce = HALF + ROAD / 2;
-    rect(-ce, -ce, ce, ce, '#5b5f66');
-    const gz = this.g.gangs.zone;
-    rect(gz.x0, gz.z0, gz.x1, gz.z1, '#4f7a52');
-    for (const b of this.g.city.blocks) {
-      rect(b.x0, b.z0, b.x1, b.z1, '#9b9b96');
-      const col = b.type === 'park' ? '#5c9a46' : b.type === 'garage' ? '#3a9a63' : '#2f3238';
-      rect(b.x0 + SIDEWALK, b.z0 + SIDEWALK, b.x1 - SIDEWALK, b.z1 - SIDEWALK, col);
+    rect(-LAND + 12, -LAND + 12, LAND - 12, LAND - 12, '#6f8f58');
+    const at = (px, pz) => this.toBase(px, pz);
+    const circle = (cx, cz, r, col) => { const [u, v] = at(cx, cz); x.fillStyle = col; x.beginPath(); x.arc(u, v, r * S, 0, Math.PI * 2); x.fill(); };
+    circle(0, 0, HALF * 0.62, '#7f7f7a');
+    const gz = this.g.city.gangZone;
+    circle(gz.x, gz.z, gz.r, 'rgba(60,150,70,0.45)');
+    for (const pk of this.g.city.parks) circle(pk.x, pk.z, pk.r, '#5c9a46');
+    // здания
+    x.fillStyle = '#34373d';
+    for (const f of this.g.city.footprints) {
+      x.beginPath();
+      f.forEach(([px, pz], i) => { const [u, v] = at(px, pz); if (i) x.lineTo(u, v); else x.moveTo(u, v); });
+      x.closePath(); x.fill();
     }
+    // дороги: сначала тротуары (шире), потом асфальт
+    const R = this.g.city.roads;
+    const stroke = (w, col) => {
+      x.strokeStyle = col; x.lineWidth = w * S; x.lineCap = 'round'; x.lineJoin = 'round';
+      for (const e of R.edges) {
+        x.beginPath();
+        e.pts.forEach((pt, i) => { const [u, v] = at(pt.x, pt.z); if (i) x.lineTo(u, v); else x.moveTo(u, v); });
+        x.stroke();
+      }
+    };
+    stroke(ROAD + SIDEWALK * 2, '#a5a59f');
+    stroke(ROAD, '#4b4f56');
     return c;
   }
 
@@ -86,7 +103,7 @@ export class Hud {
     c.fillStyle = '#fff'; c.font = `${px * 0.028}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     const st = g.stats;
     c.fillText(`Миссий выполнено: ${st.missions} · Бандитов побеждено: ${st.gang} · M — закрыть`, px / 2, px - px * 0.03);
-    const [zu, zv] = at((g.gangs.zone.x0 + g.gangs.zone.x1) / 2, (g.gangs.zone.z0 + g.gangs.zone.z1) / 2);
+    const [zu, zv] = at(g.gangs.zone.x, g.gangs.zone.z);
     c.fillStyle = '#7dff9a'; c.font = `bold ${px * 0.026}px sans-serif`;
     c.fillText('Район банды', zu, zv);
   }

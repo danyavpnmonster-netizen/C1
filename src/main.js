@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp, lerp, lerpAngle, rnd, randInt } from './config.js';
+import { clamp, lerp, lerpAngle, rnd, randInt, ROAD } from './config.js';
 import { City } from './city.js';
 import { Input } from './input.js';
 import { Car, CAR_MATS } from './vehicle.js';
@@ -30,7 +30,7 @@ class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1800);
+    this.camera = new THREE.PerspectiveCamera(65, 1, 0.4, 1800);   // ближняя плоскость дальше — точнее глубина
     this.scene.fog = new THREE.Fog(0x87b8e8, 140, 560);
     this.scene.background = new THREE.Color(0x87b8e8);
 
@@ -53,17 +53,18 @@ class Game {
     this.sfx = new Sfx();
     this.player = new Player(this);
 
-    const b = this.city.block(4, 4);
-    this.spawnPoint = { x: b.x1 - 2, z: b.cz };
-    const hb = this.city.block(2, 2), sb = this.city.block(7, 6);
-    this.hospital = { x: hb.x1 - 2, z: hb.cz };
-    this.station = { x: sb.x0 + 2, z: sb.cz };
+    const pl = this.city.places;
+    this.spawnPoint = { x: pl.spawn.x, z: pl.spawn.z };
+    this.hospital = pl.hospital;
+    this.station = pl.station;
     this.player.pos.set(this.spawnPoint.x, 0, this.spawnPoint.z);
-    this.player.facing = Math.PI / 2;
-    this.camYaw = Math.PI;
-
-    const start = this.addCar('sport', b.x1 + 2.5, b.cz - 8, 0);
+    // спорткар у обочины рядом со стартом, носом вдоль дороги
+    const R = this.city.roads, sp = R.sample(pl.spawn.edge, pl.spawn.s + 8);
+    const curb = ROAD / 2 - 2.2;
+    const start = this.addCar('sport', sp.x - sp.tz * curb, sp.z + sp.tx * curb, Math.atan2(sp.tx, sp.tz));
     start.role = 'parked';
+    this.player.facing = Math.atan2(start.pos.x - pl.spawn.x, start.pos.z - pl.spawn.z);
+    this.camYaw = this.player.facing;
 
     this.peds = new Peds(this);
     this.gangs = new Gangs(this);
@@ -170,7 +171,7 @@ class Game {
     this.heat += points;
     let w = 0;
     while (w < 5 && this.heat >= HEAT[w + 1]) w++;
-    if (w > this.wanted) { this.wanted = w; this.police.lostT = Math.min(this.police.lostT, -12); }   // 12 с полиции на подъезд
+    if (w > this.wanted) { this.wanted = w; this.police.lostT = Math.min(this.police.lostT, -20); }   // 20 с полиции на подъезд
   }
 
   setWanted(w) {
@@ -261,7 +262,8 @@ class Game {
     this.armorMat = new THREE.MeshLambertMaterial({ color: 0x8fa6c4, emissive: 0x2a4a7a, emissiveIntensity: 0.7 });
     for (let k = 0; k < 5; k++) { const s = this.city.randomSidewalk(); this.addPickup('armor', s.x, s.z, 50, true); }
     const pd = this.station; this.addPickup('armor', pd.x, pd.z + 6, 50, true);
-    const sp = this.spawnPoint; this.addPickup('ammo', sp.x, sp.z - 12, 24, true);
+    const sr = this.city.roads.sidewalkPoint(this.city.places.spawn.edge, this.city.places.spawn.s - 10, 1);
+    this.addPickup('ammo', sr.x, sr.z, 24, true);
   }
 
   addPickup(kind, x, z, value, respawn, life = 30) {
@@ -396,12 +398,15 @@ class Game {
         }
       }
       // машина сбивает игрока
-      if (!p.car && c.role !== 'parked' && this.state === 'play' && s > 5) {
+      if (!p.car && c.role !== 'parked' && this.state === 'play' && s > 5 && !(p.hitCd > 0)) {
         const d = Math.hypot(p.pos.x - c.pos.x, p.pos.z - c.pos.z);
         if (d < c.T.l * 0.5 && p.pos.y < 1.2) {
           const f = c.forward(), sg = Math.sign(c.speed);
-          p.knock.set(f.x * s * sg * 0.8, 0, f.z * s * sg * 0.8);
+          // отбрасывает вперёд и в сторону от машины, а не под колёса
+          const side = Math.sign((p.pos.x - c.pos.x) * f.z - (p.pos.z - c.pos.z) * f.x) || 1;
+          p.knock.set((f.x * sg * 0.7 + f.z * side * 0.6) * s, 0, (f.z * sg * 0.7 - f.x * side * 0.6) * s);
           p.vy = 4 + s * 0.15;
+          p.hitCd = 1;   // один удар — один урон
           this.sfx.hit(0.6); this.hud.hitFlash();
           p.hurt(s * 1.6);
         }
@@ -603,6 +608,7 @@ class Game {
       this.stateT -= dt;
       if (this.stateT <= 0) this.respawn();
     }
+    p.hitCd = Math.max(0, (p.hitCd || 0) - dt);
     p.update(dt);
     const ctlPlayer = this.state === 'play' ? this.playerCarControl() : NO_CTL;
     for (const car of this.cars) {

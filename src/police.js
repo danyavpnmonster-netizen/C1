@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { clamp, wrapAngle, nearestNode, rnd, randInt, lerpAngle } from './config.js';
-import { nodeXZ, neighbors, attachToRoad } from './traffic.js';
+import { clamp, wrapAngle, rnd, randInt, lerpAngle } from './config.js';
+import { attachToRoad, followRoad, laneAhead, turnAhead, endNode, obstacleAhead } from './traffic.js';
 import { CAR_MATS } from './vehicle.js';
 import { makeHuman, animateHuman, mat } from './human.js';
 
@@ -99,7 +99,8 @@ export class Police {
           // машины нет — уходим пешком и исчезаем вдали
           o.pos.x -= dx / d * 1.5 * dt; o.pos.z -= dz / d * 1.5 * dt;
           o.facing = Math.atan2(-dx, -dz); moving = 1; o.phase += dt * 6;
-          if (d > 70) { this.removeOfficer(o); continue; }
+          o.timer += dt;
+          if (d > 70 || o.timer > 10) { this.removeOfficer(o); continue; }
         } else {
           // погоня: при 1–2 звёздах бегут арестовать, с 3 — держат дистанцию и стреляют
           const hold = g.wanted >= 3 ? 9 : 1.1;
@@ -171,7 +172,7 @@ export class Police {
 
     const arresting = this.updateOfficers(dt);
     if (!active) {
-      for (const c of cops) if (!c.copsOut) { c.role = 'traffic'; attachToRoad(c); }
+      for (const c of cops) if (!c.copsOut) { c.role = 'traffic'; attachToRoad(c, g.city.roads); }
       this.bustT = 0; this.lostT = 0; this.nearest = Infinity;
       return;
     }
@@ -187,7 +188,7 @@ export class Police {
     for (const c of cops) c.deployCd = Math.max(0, (c.deployCd || 0) - dt);
     this.spawnT -= dt;
     if (cops.length < WANT_CARS[g.wanted] && this.spawnT <= 0) {
-      g.traffic.spawn(80, 150, 'police', 'police');
+      g.traffic.spawn(60, 120, 'police', 'police');
       this.spawnT = 2.5;
     }
 
@@ -238,12 +239,37 @@ export class Police {
     }
   }
 
+  // Расстояния по дорогам до перекрёстка, ближайшего к игроку (пересчёт раз в секунду).
+  routeTable() {
+    const g = this.game, R = g.city.roads, P = g.playerPos();
+    if (!this.route || g.time - this.route.t > 1) {
+      const n = R.nearestNode(P.x, P.z);
+      this.route = { t: g.time, node: n.id, dist: R.distancesTo(n.id) };
+    }
+    return this.route;
+  }
+
+  // Следующая дорога на перекрёстке: та, что ведёт ближе к игроку.
+  chooser() {
+    const R = this.game.city.roads, rt = this.routeTable();
+    return (edgeId, nodeId) => {
+      let best = edgeId, bd = Infinity;
+      for (const e of R.nodes[nodeId].edges) {
+        const o = R.other(e, nodeId), d = rt.dist[o] + R.edges[e].L;
+        if (e === edgeId && R.nodes[nodeId].edges.length > 1) continue;
+        if (d < bd) { bd = d; best = e; }
+      }
+      return best;
+    };
+  }
+
   control(car, dt) {
-    const g = this.game, P = g.playerPos(), pc = g.player.car;
+    const g = this.game, P = g.playerPos(), pc = g.player.car, R = g.city.roads;
     if (car.copsOut) return PARK;
-    const ai = car.ai || (car.ai = {});
+    if (!car.ai || car.ai.edge === undefined) attachToRoad(car, R);
+    const ai = car.ai;
     const d = Math.hypot(P.x - car.pos.x, P.z - car.pos.z);
-    let ax, az;
+    let ax, az, target;
     // напрямую — только если между машиной и игроком нет зданий
     ai.losT = (ai.losT || 0) - dt;
     if (ai.losT <= 0) { ai.los = d < 45 && this.clearPath(car.pos, P); ai.losT = 0.25; }
@@ -251,43 +277,38 @@ export class Police {
     if (ai.los) {
       ax = P.x + (pc ? Math.sin(pc.heading) * pc.speed * 0.4 : 0);
       az = P.z + (pc ? Math.cos(pc.heading) * pc.speed * 0.4 : 0);
+      target = clamp(d * 0.9, 0, 32) + (pc ? Math.max(0, pc.speed) * 0.5 : 0);
+      ai.offRoad = true;
     } else {
-      // едем по перекрёсткам к игроку
-      if (!ai.chase) ai.chase = ai.to || nearestNode(car.pos);   // начинаем с перекрёстка впереди
-      let T = nodeXZ(ai.chase);
-      if (Math.hypot(T.x - car.pos.x, T.z - car.pos.z) < 10) {
-        // соседний перекрёсток — только если он заметно ближе к игроку
-        let best = ai.chase, bd = Math.hypot(T.x - P.x, T.z - P.z) - 1;
-        for (const n of neighbors(ai.chase)) {
-          const q = nodeXZ(n), dd = Math.hypot(q.x - P.x, q.z - P.z);
-          if (dd < bd) { bd = dd; best = n; }
-        }
-        ai.atBest = best === ai.chase;   // ближе к игроку по дорогам не подъехать
-        ai.chase = best; T = nodeXZ(best);
-      }
+      // по дорогам: на перекрёстках сворачиваем туда, где путь до игрока короче
+      if (ai.offRoad) { attachToRoad(car, R); ai.offRoad = false; }
+      const choose = this.chooser();
+      if (ai.chooserSet !== true) { ai.next = choose(ai.edge, endNode(R, ai)); ai.chooserSet = true; }
+      followRoad(car, R, choose);
+      const T = laneAhead(R, ai, 8 + Math.abs(car.speed) * 0.4);
       ax = T.x; az = T.z;
-      // игрок за домами рядом: встаём у перекрёстка, дальше полицейские пойдут пешком
-      if (ai.atBest && Math.hypot(T.x - car.pos.x, T.z - car.pos.z) < 12 && d < 60) ai.waiting = true;
+      target = 30;
+      const bend = turnAhead(R, ai, 4, 30);
+      if (bend > 0.25) target = Math.max(8, 30 - bend * 16);
+      // с сиреной машины не объезжаем (пусть уступают), но людей не давим
+      const block = obstacleAhead(car, g, 18, false);
+      if (block < 18) target = Math.min(target, Math.max(0, (block - 6) * 1.2));
+      // приехали к перекрёстку, ближайшему к игроку, а игрок за домами — дальше пешком
+      const rt = this.routeTable(), node = R.nodes[endNode(R, ai)];
+      if (endNode(R, ai) === rt.node && Math.hypot(node.x - car.pos.x, node.z - car.pos.z) < 14 && d < 70) ai.waiting = true;
     }
     // после застревания сначала выезжаем на середину ближайшего перекрёстка
     ai.recoverT = Math.max(0, (ai.recoverT || 0) - dt);
     if (ai.recoverT > 0) {
-      const R = nodeXZ(ai.recoverNode);
-      if (Math.hypot(R.x - car.pos.x, R.z - car.pos.z) < 6) ai.recoverT = 0;
-      else { ax = R.x; az = R.z; ai.waiting = false; }
+      const N = R.nodes[ai.recoverNode];
+      if (Math.hypot(N.x - car.pos.x, N.z - car.pos.z) < 6) { ai.recoverT = 0; attachToRoad(car, R); }
+      else { ax = N.x; az = N.z; ai.waiting = false; target = Math.min(target, 8); }
     }
     const desired = Math.atan2(ax - car.pos.x, az - car.pos.z);
     const diff = wrapAngle(desired - car.heading);
-    let target = ai.los ? clamp(d * 0.9, 0, 32) + (pc ? Math.max(0, pc.speed) * 0.5 : 0) : 30;
-    // перед перекрёстком тормозим, чтобы вписаться в поворот
-    if (!ai.los) {
-      const dn = Math.hypot(ax - car.pos.x, az - car.pos.z);
-      if (dn < 30) target = Math.min(target, 8 + dn * 0.35);
-    }
-    if (ai.recoverT > 0) target = Math.min(target, 8);
     if (ai.waiting) target = 0;
     if (d < 6) target = Math.min(target, pc ? Math.abs(pc.speed) + 1 : 0);
-    if (Math.abs(diff) > 0.6 && car.speed > 12) target = 10;
+    if (Math.abs(diff) > 0.6 && car.speed > 12) target = Math.min(target, 10);
 
     if (ai.revT > 0) {
       ai.revT -= dt;
@@ -297,7 +318,7 @@ export class Police {
       ai.stuckT = (ai.stuckT || 0) + dt;
       if (ai.stuckT > 1.3) {
         ai.stuckT = 0; ai.revT = 1.3;
-        ai.recoverNode = nearestNode(car.pos); ai.recoverT = 6;
+        ai.recoverNode = R.nearestNode(car.pos.x, car.pos.z).id; ai.recoverT = 6;
       }
     } else ai.stuckT = 0;
 

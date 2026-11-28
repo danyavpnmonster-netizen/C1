@@ -1,14 +1,13 @@
 import * as THREE from 'three';
-import { N, BLOCK, nodeCoord, rnd, pick, randInt } from './config.js';
-import { neighbors } from './traffic.js';
+import { rnd, pick } from './config.js';
 import { makeHuman, randomLook } from './human.js';
 
+// Случайная точка у обочины (правая полоса, ближе к тротуару).
+let ROADS = null;
 function roadSpot() {
-  const a = { i: randInt(0, N), j: randInt(0, N) }, b = pick(neighbors(a));
-  const ax = nodeCoord(a.i), az = nodeCoord(a.j);
-  const dx = (nodeCoord(b.i) - ax) / BLOCK, dz = (nodeCoord(b.j) - az) / BLOCK;
-  const t = rnd(0.3, 0.7) * BLOCK;
-  return { x: ax + dx * t - dz * 6, z: az + dz * t + dx * 6, h: Math.atan2(dx, dz) };
+  const e = ROADS.randomEdge();
+  const sp = e.L * rnd(0.3, 0.7), p = ROADS.sample(e.id, sp);
+  return { x: p.x - p.tz * 6, z: p.z + p.tx * 6, h: Math.atan2(p.tx, p.tz) };
 }
 function spotFrom(P, minD, maxD) {
   for (let k = 0; k < 80; k++) {
@@ -32,13 +31,14 @@ function column(color, r, h, opacity = 0.35) {
 export class Missions {
   constructor(game) {
     this.game = game;
-    const c = game.city;
-    const b1 = c.block(4, 4), b2 = c.block(5, 5), b3 = c.block(3, 5), b4 = c.block(4, 5);
+    ROADS = game.city.roads;
+    const gp = game.city.places.givers;
+    const at = (k) => ({ x: gp[k].x, z: gp[k].z });
     this.givers = [
-      { type: 'courier', name: 'Курьер', color: 0xffcc00, pos: { x: b1.x1 - 2, z: b1.cz + 14 }, car: false },
-      { type: 'taxi', name: 'Такси', color: 0x33aaff, pos: { x: b2.x0 + 2, z: b2.cz }, car: true },
-      { type: 'race', name: 'Гонка', color: 0xff4466, pos: { x: b3.x1 - 2, z: b3.cz - 10 }, car: true },
-      { type: 'steal', name: 'Угон на заказ', color: 0xaa55ff, pos: { x: b4.cx + 12, z: b4.z0 + 2 }, car: false },
+      { type: 'courier', name: 'Курьер', color: 0xffcc00, pos: at(0), car: false },
+      { type: 'taxi', name: 'Такси', color: 0x33aaff, pos: at(1), car: true },
+      { type: 'race', name: 'Гонка', color: 0xff4466, pos: at(2), car: true },
+      { type: 'steal', name: 'Угон на заказ', color: 0xaa55ff, pos: at(3), car: false },
     ];
     for (const g of this.givers) {
       g.mesh = new THREE.Group();

@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { makeHuman, animateHuman, mat } from './human.js';
-import { SIDEWALK, rnd, randInt, wrapAngle } from './config.js';
+import { rnd, randInt, wrapAngle } from './config.js';
 
-// Район банды «Зелёные Змеи»: кварталы с bi 7..9 и bj 0..2.
-export const GANG_ZONE = { bi0: 7, bi1: 9, bj0: 0, bj1: 2 };
+// Район банды «Зелёные Змеи» — круг на северо-востоке города (city.gangZone).
 const GANG_COLOR = 0x1f9e4a;
 
 class Member {
@@ -30,21 +29,17 @@ export class Gangs {
     this.game = game;
     this.list = [];
     this.alert = 0;   // > 0 — вся банда враждебна
-    const z = GANG_ZONE, city = game.city;
-    for (let bi = z.bi0; bi <= z.bi1; bi++) for (let bj = z.bj0; bj <= z.bj1; bj++) {
-      if ((bi + bj) % 2) continue;                       // группы через квартал
-      const b = city.block(bi, bj), s = SIDEWALK / 2;
-      const spot = { x: b.x1 - s, z: b.cz + 9 };
+    const city = game.city;
+    for (const spot of city.places.gang) {
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * Math.PI * 2;
-        this.list.push(new Member(game.scene, { x: spot.x + Math.cos(a) * 0.3, z: spot.z + Math.sin(a) * 1.6 }));
+        this.list.push(new Member(game.scene, { x: spot.x + Math.cos(a) * 1.2, z: spot.z + Math.sin(a) * 1.2 }));
       }
     }
-    const b0 = city.block(z.bi0, z.bj0), b1 = city.block(z.bi1, z.bj1);
-    this.zone = { x0: b0.x0 - 8, x1: b1.x1 + 8, z0: b0.z0 - 8, z1: b1.z1 + 8 };
+    this.zone = city.gangZone;   // {x, z, r}
   }
 
-  inZone(p) { const z = this.zone; return p.x > z.x0 && p.x < z.x1 && p.z > z.z0 && p.z < z.z1; }
+  inZone(p) { const z = this.zone; return Math.hypot(p.x - z.x, p.z - z.z) < z.r; }
 
   hit(m, dmg, dx = 0, dz = 0) {
     if (m.state === 'dead' || m.state === 'flying') return;

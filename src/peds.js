@@ -1,18 +1,14 @@
 import * as THREE from 'three';
 import { makeHuman, animateHuman, randomLook } from './human.js';
-import { N, SIDEWALK, clamp, rnd, randInt, pick, blockIndex } from './config.js';
+import { rnd, randInt, pick } from './config.js';
+import { NODE_R } from './roads.js';
 
-function corners(b) {
-  const s = SIDEWALK / 2;
-  return [[b.x0 + s, b.z0 + s], [b.x1 - s, b.z0 + s], [b.x1 - s, b.z1 - s], [b.x0 + s, b.z1 - s]];
-}
-// переход улицы на соседний квартал: [di, dj, новый индекс угла]
-const CROSS = {
-  0: [[-1, 0, 1], [0, -1, 3]],
-  1: [[1, 0, 0], [0, -1, 2]],
-  2: [[1, 0, 3], [0, 1, 1]],
-  3: [[-1, 0, 2], [0, 1, 0]],
-};
+// Пешеходы ходят по тротуарам вдоль дорог. Маршрут: p.w = {edge, side, s, dir}
+// (side +1 — тротуар справа от направления a→b, dir — куда идёт вдоль дороги).
+// У перекрёстка сворачивают за угол или переходят улицу.
+
+const STEP = 4;
+const END = NODE_R + 1;
 
 class Ped {
   constructor(scene) {
@@ -23,7 +19,7 @@ class Ped {
     this.vel = new THREE.Vector3();
     this.state = 'walk'; this.facing = 0; this.phase = Math.random() * 6;
     this.speed = rnd(1.1, 1.6); this.timer = 0;
-    this.bi = 0; this.bj = 0; this.ci = 0; this.dir = 1;
+    this.w = { edge: 0, side: 1, s: 0, dir: 1 };
     this.target = { x: 0, z: 0 }; this.flee = { x: 0, z: 0 };
   }
 }
@@ -39,59 +35,68 @@ export class Peds {
     }
   }
 
+  get R() { return this.game.city.roads; }
+
+  setTarget(p) {
+    const pt = this.R.sidewalkPoint(p.w.edge, p.w.s, p.w.side);
+    p.target.x = pt.x; p.target.z = pt.z;
+  }
+
   respawn(p, initial = false) {
-    const g = this.game, P = g.playerPos(), city = g.city;
-    const pbi = clamp(blockIndex(P.x), 0, N - 1), pbj = clamp(blockIndex(P.z), 0, N - 1);
-    let x = 0, z = 0;
-    for (let t = 0; t < 25; t++) {
-      p.bi = clamp(pbi + randInt(-2, 2), 0, N - 1);
-      p.bj = clamp(pbj + randInt(-2, 2), 0, N - 1);
-      const cs = corners(city.block(p.bi, p.bj));
-      const ci = randInt(0, 3), a = cs[ci], b = cs[(ci + 1) % 4], k = Math.random();
-      x = a[0] + (b[0] - a[0]) * k; z = a[1] + (b[1] - a[1]) * k;
-      p.dir = Math.random() < 0.5 ? 1 : -1;
-      p.ci = p.dir > 0 ? (ci + 1) % 4 : ci;
-      const d = Math.hypot(x - P.x, z - P.z);
-      if ((initial ? d > 6 : d > 50) && d < 130) break;
+    const g = this.game, P = g.playerPos(), R = this.R;
+    for (let t = 0; t < 30; t++) {
+      const a = Math.random() * Math.PI * 2, r = initial ? rnd(8, 120) : rnd(55, 125);
+      const n = R.nearest(P.x + Math.cos(a) * r, P.z + Math.sin(a) * r, 50);
+      if (!n) continue;
+      const e = R.edges[n.edge];
+      if (e.L < END * 2 + 4) continue;
+      const sPos = Math.min(Math.max(n.s, END), e.L - END);
+      p.w = { edge: n.edge, side: Math.random() < 0.5 ? 1 : -1, s: sPos, dir: Math.random() < 0.5 ? 1 : -1 };
+      const pt = R.sidewalkPoint(n.edge, sPos, p.w.side);
+      const d = Math.hypot(pt.x - P.x, pt.z - P.z);
+      if (!initial && d < 45) continue;
+      p.pos.set(pt.x, 0, pt.z);
+      break;
     }
-    p.pos.set(x, 0, z);
-    const c = corners(city.block(p.bi, p.bj))[p.ci];
-    p.target.x = c[0]; p.target.z = c[1];
+    this.advance(p);
     p.state = 'walk'; p.timer = 0;
     p.mesh.rotation.set(0, 0, 0);
     p.mesh.visible = true;
   }
 
+  // Следующая точка маршрута; у конца дороги — переход на соседнюю.
+  advance(p) {
+    const R = this.R, w = p.w, e = R.edges[w.edge];
+    const ns = w.s + w.dir * STEP;
+    if (ns > END && ns < e.L - END) { w.s = ns; this.setTarget(p); return; }
+    // перекрёсток: выбираем дорогу дальше
+    const node = w.dir > 0 ? e.b : e.a;
+    const opts = R.nodes[node].edges.filter((id) => id !== w.edge && R.edges[id].L > END * 2 + 2);
+    const nid = opts.length ? pick(opts) : w.edge;
+    const ne = R.edges[nid];
+    const atA = ne.a === node;
+    const s2 = atA ? END : ne.L - END;
+    // сторона: ближайшая (за угол) или, иногда, через дорогу
+    const here = { x: p.pos.x, z: p.pos.z };
+    const pa = R.sidewalkPoint(nid, s2, 1), pb = R.sidewalkPoint(nid, s2, -1);
+    let side = Math.hypot(pa.x - here.x, pa.z - here.z) < Math.hypot(pb.x - here.x, pb.z - here.z) ? 1 : -1;
+    if (Math.random() < 0.25) side = -side;
+    p.w = { edge: nid, side, s: s2, dir: atA ? 1 : -1 };
+    this.setTarget(p);
+  }
+
   resumeWalk(p) {
-    p.bi = clamp(blockIndex(p.pos.x), 0, N - 1);
-    p.bj = clamp(blockIndex(p.pos.z), 0, N - 1);
-    const cs = corners(this.game.city.block(p.bi, p.bj));
-    let bd = Infinity;
-    cs.forEach((c, i) => { const d = Math.hypot(c[0] - p.pos.x, c[1] - p.pos.z); if (d < bd) { bd = d; p.ci = i; } });
-    p.target.x = cs[p.ci][0]; p.target.z = cs[p.ci][1];
+    const R = this.R, n = R.nearest(p.pos.x, p.pos.z, 120);
+    if (n) {
+      const e = R.edges[n.edge];
+      p.w = { edge: n.edge, side: n.side, s: Math.min(Math.max(n.s, END), e.L - END), dir: Math.random() < 0.5 ? 1 : -1 };
+      this.setTarget(p);
+    }
     p.state = 'walk';
     p.mesh.rotation.set(0, p.facing, 0);
   }
 
-  arrive(p) {
-    const city = this.game.city;
-    if (Math.random() < 0.3) {
-      const opts = CROSS[p.ci].filter(([di, dj]) => {
-        const bi = p.bi + di, bj = p.bj + dj;
-        return bi >= 0 && bi < N && bj >= 0 && bj < N;
-      });
-      if (opts.length) {
-        const [di, dj, nci] = pick(opts);
-        p.bi += di; p.bj += dj; p.ci = nci;
-        const c = corners(city.block(p.bi, p.bj))[p.ci];
-        p.target.x = c[0]; p.target.z = c[1];
-        return;
-      }
-    }
-    p.ci = (p.ci + p.dir + 4) % 4;
-    const c = corners(city.block(p.bi, p.bj))[p.ci];
-    p.target.x = c[0]; p.target.z = c[1];
-  }
+  arrive(p) { this.advance(p); }
 
   scare(pos, radius) {
     for (const p of this.list) {

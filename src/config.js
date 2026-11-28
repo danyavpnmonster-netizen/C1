@@ -6,7 +6,7 @@ export const ROAD = 16;       // ширина дороги
 export const LANE = 4;        // смещение полосы от осевой
 export const SIDEWALK = 4;    // ширина тротуара
 export const SIZE = N * BLOCK;
-export const HALF = SIZE / 2;
+export const HALF = 395;          // полуразмер города (дорожная сеть roads.js укладывается в ±395)
 export const LAND = HALF + ROAD / 2 + 16;   // край суши (дальше — пляж и океан)
 export const BOUND = LAND - 2;              // граница, за которую нельзя уехать
 

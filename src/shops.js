@@ -109,7 +109,8 @@ export class Shops {
     const g = this.game, p = g.player, s = this.inside;
     this.inside = null;
     this.closePanel();
-    p.pos.set(s.door.x, 0, s.door.z - 1.8); p.facing = Math.PI; g.camYaw = Math.PI;
+    p.pos.set(s.door.x + s.door.nx * 1.8, 0, s.door.z + s.door.nz * 1.8);
+    p.facing = Math.atan2(s.door.nx, s.door.nz); g.camYaw = p.facing;
     this.cd = 1.5;
   }
 

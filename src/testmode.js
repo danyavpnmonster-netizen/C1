@@ -82,9 +82,10 @@ export class TestMode {
 
   // Внешнее кольцо: длинная прямая вдоль пляжа.
   toStraight() {
-    const half = this.game.city.blocks[0].x0 - 8;   // осевая крайней дороги
-    this.place(half - 4, half + 20, 0);
-    this.game.hud.message('Прямая 800 м: проверьте разгон и торможение', 2.5);
+    const R = this.game.city.roads, e = R.edges[this.game.city.places.straight.edge];
+    const p = R.sample(e.id, 20);
+    this.place(p.x - p.tz * 4, p.z + p.tx * 4, Math.atan2(p.tx, p.tz));
+    this.game.hud.message(`Прибрежная дорога ${Math.round(e.L)} м: проверьте разгон и торможение`, 2.5);
   }
 
   // Ряд припаркованных машин впереди — для проверки столкновений.
