@@ -1,0 +1,7 @@
+{
+  "name": "sunrise-bay-server-node",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "8.22.2" }
+}

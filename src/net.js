@@ -196,6 +196,66 @@ class PeerTransport {
   close() { this.gen++; this.cleanup(); }
 }
 
+// ---------- выделенный сервер (всегда открыт) ----------
+// Cloudflare Workers или свой компьютер (server/). Подключение по WebSocket.
+// Адрес по умолчанию задаётся здесь после развёртывания; в меню его можно поменять.
+export const DEFAULT_SERVER_URL = '';
+
+// «sunrise-bay-server.имя.workers.dev» → wss://…/ws, «192.168.1.5:8080» → ws://…/ws
+export function toWsUrl(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (/^\d{1,3}(\.\d{1,3}){3}:\d+/.test(s)) s = 'ws://' + s;
+  else if (!/^[a-z]+:\/\//i.test(s)) s = 'wss://' + s;
+  s = s.replace(/^http/i, 'ws');
+  try {
+    const u = new URL(s);
+    if (u.pathname === '/' || u.pathname === '') u.pathname = '/ws';
+    return u.toString();
+  } catch (e) { return ''; }
+}
+const statusUrl = (ws) => ws.replace(/^ws/i, 'http').replace(/\/ws(\?.*)?$/, '/status');
+
+class WsTransport {
+  constructor(onEvent, url) { this.onEvent = onEvent; this.url = url; this.gen = 0; }
+  online() { return navigator.onLine !== false; }
+  myIp() { return ''; }
+  players() { return 0; }
+  join() {
+    this.close();
+    const gen = ++this.gen;
+    this.onEvent('state', 'connecting');
+    let ws;
+    try { ws = this.ws = new WebSocket(this.url); } catch (e) { this.onEvent('error', 'неверный адрес сервера'); return; }
+    let opened = false;
+    const to = setTimeout(() => { if (!opened && gen === this.gen) { try { ws.close(); } catch (e) { /* */ } this.onEvent('error', 'сервер не отвечает'); } }, 10000);
+    ws.onopen = () => {
+      if (gen !== this.gen) return;
+      opened = true; clearTimeout(to);
+      this.onEvent('state', 'connected');
+      clearInterval(this.ping);
+      this.ping = setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 25000);
+    };
+    ws.onmessage = (e) => { if (gen === this.gen && e.data !== 'pong') this.onEvent('msg', String(e.data)); };
+    ws.onclose = () => {
+      clearInterval(this.ping);
+      if (gen !== this.gen) return;
+      if (opened) this.onEvent('state', 'closed');
+      else { clearTimeout(to); this.onEvent('error', 'не удалось подключиться к серверу'); }
+    };
+  }
+  send(line) { if (this.ws && this.ws.readyState === 1) this.ws.send(line); }
+  close() { this.gen++; clearInterval(this.ping); if (this.ws) { try { this.ws.close(); } catch (e) { /* */ } } this.ws = null; }
+}
+
+// Время суток и погода по часам выделенного сервера: у всех одинаковые.
+export function worldAt(ms) {
+  const hour = (9 + ms / 1000 / 30) % 24;            // игровой час = 30 секунд
+  const block = Math.floor(ms / 240000);              // погода меняется раз в 4 минуты
+  const rain = ((Math.imul(block, 2654435761) >>> 0) % 100) < 30;
+  return { hour, rain };
+}
+
 export class Net {
   constructor(game) {
     this.game = game;
@@ -210,12 +270,25 @@ export class Net {
     this.lan = window.AndroidNet || (/[?&]net=local/.test(location.search) ? new LocalTransport(ev) : null);
     // интернет: WebRTC через PeerJS (в приложении и в браузере с WebRTC)
     this.inet = window.Peer && window.RTCPeerConnection ? new PeerTransport(ev) : null;
+    this.serverUrl = this.loadServerUrl();
+    this.ded = this.serverUrl ? new WsTransport(ev, this.serverUrl) : null;
     this.t = null;          // активный транспорт
     this.mode = null;       // 'inet' | 'lan'
     this.ui();
   }
 
   get connected() { return this.state === 'connected'; }
+
+  loadServerUrl() {
+    try { const u = localStorage.getItem('sunrise-bay-server-url'); if (u !== null) return u; } catch (e) { /* нет */ }
+    return toWsUrl(DEFAULT_SERVER_URL);
+  }
+
+  setServerUrl(u) {
+    this.serverUrl = u;
+    try { localStorage.setItem('sunrise-bay-server-url', u); } catch (e) { /* нет */ }
+    this.ded = u ? new WsTransport((a, b) => this.onEvent(a, b), u) : null;
+  }
 
   loadNick() {
     try { const n = localStorage.getItem('sunrise-bay-nick'); if (n) return n; } catch (e) { /* нет хранилища */ }
@@ -236,10 +309,16 @@ export class Net {
     $('netbtn').addEventListener('click', (e) => { e.stopPropagation(); this.open(); });
     $('hudnet').addEventListener('click', (e) => { e.stopPropagation(); this.open(); });
     $('netback').addEventListener('click', () => { this.panel.style.display = 'none'; });
+    $('netip').value = this.serverUrl || '';
     $('netgo').addEventListener('click', () => {
-      const ip = $('netip').value.trim();
-      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) this.connect(ip);
-      else this.say('Введите адрес вида 192.168.1.23 — его видно в меню серверов у того, на чьём телефоне работает сервер.');
+      const v = $('netip').value.trim();
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) { this.connect(v); return; }      // телефон в этой сети Wi-Fi
+      const u = toWsUrl(v);
+      if (!u) { this.say('Введите адрес сервера, например sunrise-bay-server.имя.workers.dev или 192.168.1.23.'); return; }
+      this.setServerUrl(u);
+      $('netip').value = u;
+      this.shownKey = null; this.renderList();
+      this.joinInet();
     });
   }
 
@@ -250,10 +329,11 @@ export class Net {
       this.say(this.mode === 'lan'
         ? (this.isHost ? `Сервер работает на этом телефоне. Адрес для подключения: ${this.t.myIp() || '—'}.` : 'Вы на сервере в этой сети Wi-Fi.')
         : (this.isHost ? 'Сервер #1 работает на этом телефоне. Друзья могут войти с Wi-Fi или мобильного интернета.' : 'Вы на «Сервере #1» через интернет.'));
-    } else if (!this.inet && !this.lan) {
+    } else if (!this.inet && !this.lan && !this.ded) {
       this.say('Сетевая игра работает в Android-приложении Sunrise Bay (файл APK).');
     } else {
       this.say('«Сервер #1» — игра через интернет: подходит и Wi-Fi, и мобильный интернет. «Локальная игра» — только для телефонов в одной сети Wi-Fi.');
+      this.pollStatus();
       if (this.lan && this.lan.online()) {
         this.searching = true;
         this.lan.scan();
@@ -290,10 +370,16 @@ export class Net {
       r.append(btn);
       this.list.append(r);
     };
-    let sub1 = 'Интернет: Wi-Fi и мобильный';
-    if (this.connected && this.mode === 'inet') sub1 = this.isHost ? 'Сервер на этом телефоне' : 'Вы подключены';
-    if (!this.inet) sub1 = 'Недоступно на этом устройстве';
-    row('🌐', SERVER_NAME, sub1, this.mode === 'inet' && this.connected ? `${players}/${MAX_PLAYERS}` : '', 'inet', () => this.joinInet(), !!this.inet);
+    let sub1 = 'Интернет: Wi-Fi и мобильный · через телефоны игроков';
+    let cnt1 = this.mode === 'inet' && this.connected ? `${players}/${this.maxPlayers || MAX_PLAYERS}` : '';
+    if (this.ded) {
+      const st = this.dedStatus;
+      sub1 = 'Всегда открыт · Wi-Fi и мобильный' + (st && st.offline ? ' · не отвечает' : '');
+      if (!cnt1 && st && !st.offline) cnt1 = `${st.players}/${st.max}`;
+    }
+    if (this.connected && this.mode === 'inet') sub1 = this.dedicated ? 'Вы на сервере (всегда открыт)' : this.isHost ? 'Сервер на этом телефоне' : 'Вы подключены';
+    if (!this.inet && !this.ded) sub1 = 'Недоступно на этом устройстве';
+    row('🌐', SERVER_NAME, sub1, cnt1, 'inet', () => this.joinInet(), !!(this.inet || this.ded));
     let sub2 = 'Только эта сеть Wi-Fi';
     if (this.connected && this.mode === 'lan') sub2 = this.isHost ? 'Wi-Fi, на этом телефоне' : 'Wi-Fi, вы подключены';
     else if (found) sub2 = `Wi-Fi, ${found.address}`;
@@ -306,11 +392,22 @@ export class Net {
 
   // Интернет: подключиться к «Серверу #1» или запустить его у себя.
   joinInet() {
-    if (!this.inet) return;
-    if (this.t && this.t !== this.inet) this.t.close();
-    this.t = this.inet; this.mode = 'inet'; this.isHost = false;
-    this.say('Подключаемся к «Серверу #1» через интернет…');
-    this.inet.join();
+    const tr = this.ded || this.inet;                // выделенный сервер, иначе — через телефоны игроков
+    if (!tr) return;
+    if (this.t && this.t !== tr) this.t.close();
+    this.t = tr; this.mode = 'inet'; this.isHost = false; this.dedicated = tr === this.ded;
+    this.say(this.dedicated ? 'Подключаемся к серверу…' : 'Подключаемся к «Серверу #1» через интернет…');
+    tr.join();
+  }
+
+  // Сколько игроков на выделенном сервере (для меню).
+  async pollStatus() {
+    if (!this.ded || this.connected) return;
+    try {
+      const r = await fetch(statusUrl(this.serverUrl), { cache: 'no-store' });
+      const j = await r.json();
+      this.dedStatus = j; this.shownKey = null; this.renderList();
+    } catch (e) { this.dedStatus = { offline: true }; this.shownKey = null; this.renderList(); }
   }
 
   // Wi-Fi: к найденному серверу; если поиск ещё идёт — дождаться; если никого нет — свой сервер.
@@ -341,6 +438,7 @@ export class Net {
         this.panel.style.display = 'none';
         g.begin(false);
         g.hud.big(this.isHost ? 'СЕРВЕР #1 ЗАПУЩЕН' : 'СЕРВЕР #1', 2.5);
+        if (!this.isHost && this.dedicated) g.hud.message('Вы на «Сервере #1». Он открыт всегда — заходите когда угодно', 4);
         if (this.isHost && this.mode === 'lan') g.hud.message(`Другие игроки в этой сети Wi-Fi могут войти. Ваш адрес: ${this.t.myIp() || '—'}`, 5);
         if (this.isHost && this.mode === 'inet') g.hud.message('Друзья могут войти на «Сервер #1» с Wi-Fi или мобильного интернета', 5);
         this.send({ t: 'hi', nick: this.nick });
@@ -351,7 +449,12 @@ export class Net {
         for (const id of [...this.remotes.keys()]) this.drop(id);
         this.myId = null;
         document.body.classList.remove('online');
-        if (this.mode === 'inet' && !this.leaving) {
+        if (this.mode === 'inet' && this.dedicated && !this.leaving) {
+          // сервер всегда открыт — просто переподключаемся
+          g.hud.message('Связь с сервером прервалась — переподключаемся…', 3);
+          clearTimeout(this.rejoinT);
+          this.rejoinT = setTimeout(() => { if (!this.connected) this.joinInet(); }, 2000);
+        } else if (this.mode === 'inet' && !this.leaving) {
           // хозяин сервера вышел — переподключаемся: первый станет новым сервером, остальные войдут к нему
           g.hud.message('Сервер переезжает на другой телефон…', 3);
           clearTimeout(this.rejoinT);
@@ -392,7 +495,16 @@ export class Net {
 
   onMessage(from, m) {
     const g = this.game;
-    if (m.t === 'welcome') { this.myId = m.id; this.send({ t: 'hi', nick: this.nick }); return; }
+    if (m.t === 'welcome') {
+      this.myId = m.id;
+      if (m.dedicated) {
+        this.serverOffset = m.now - Date.now();       // мир идёт по часам сервера
+        this.maxPlayers = m.max;
+        this.worldT = 0;
+      }
+      this.send({ t: 'hi', nick: this.nick });
+      return;
+    }
     if (m.t === 'full') { this.say('Сервер заполнен (8 игроков).'); this.close(); this.open(); return; }
     if (from === this.myId) return;
     if (m.t === 'join') {
@@ -483,6 +595,15 @@ export class Net {
       });
     }
     if (this.isHost) { this.syncT -= dt; if (this.syncT <= 0) { this.syncT = 5; this.sendWorld(); } }
+    if (this.dedicated && this.serverOffset != null) {
+      this.worldT -= dt;
+      if (this.worldT <= 0) {
+        this.worldT = 2;
+        const w = worldAt(Date.now() + this.serverOffset);
+        g.hour = w.hour;
+        if ((w.rain ? 1 : 0) !== g.weather.target) g.weather.setRain(w.rain);
+      }
+    }
     for (const r of this.remotes.values()) this.updateRemote(r, dt);
   }
 
