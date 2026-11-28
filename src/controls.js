@@ -119,9 +119,11 @@ export class Controls {
   edit(on) {
     this.editing = on;
     document.body.classList.toggle('editing', on);
-    document.body.classList.remove('editcar');
+    // редактор открывается с тем набором, который сейчас на экране
+    const car = on && !!this.game.player.car;
+    document.body.classList.toggle('editcar', car);
     this.game.touchInCar = undefined;   // вернуть подписи кнопок по текущему режиму
-    document.getElementById('editmode').textContent = 'Сейчас: пешком → в машине';
+    document.getElementById('editmode').textContent = car ? 'Сейчас: в машине → пешком' : 'Сейчас: пешком → в машине';
     this.panel.style.display = 'none';
     this.tools.style.display = on ? 'flex' : 'none';
     if (on) this.select(this.items[1]);
