@@ -61,6 +61,7 @@
   #start .go:not(.test) { animation: pulse 1.4s infinite; }
   #start .go.test { border-color: #4fc3ff; }
   #start .go.net { border-color: #ff9a2e; }
+  #start .go.set { border-color: #ffcc33; padding-left: 18px; padding-right: 18px; }
   #netpanel { position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; background: rgba(5,10,24,.9); padding: 16px; overflow-y: auto; }
   #netpanel .box { width: min(460px, 100%); background: #0f1830; border: 2px solid #ff9a2e; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   #netpanel h2 { margin: 0; color: #ff9a2e; font-size: 22px; }
@@ -116,10 +117,40 @@
 
   #touch { display: none; }
   body.touch #touch { display: block; }
+  #touch .tbtn, #joy { opacity: var(--tb-opacity, .85); }
   #joy { position: fixed; left: 24px; bottom: 24px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.35); z-index: 5; }
-  #knob { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.5); }
+  #knob { position: absolute; left: 31%; top: 31%; width: 38%; height: 38%; border-radius: 50%; background: rgba(255,255,255,.5); }
+  /* настройка кнопок */
+  body.editing #touch { display: block; }
+  body.editing:not(.editcar) .tbtn.foot, body.editing.editcar .tbtn.car { display: flex !important; }
+  body.editing:not(.editcar) .tbtn.car, body.editing.editcar .tbtn.foot { display: none !important; }
+  body.editing #touch .tbtn, body.editing #joy { opacity: 1; outline: 2px dashed rgba(255,255,255,.7); outline-offset: 3px; touch-action: none; cursor: grab; }
+  body.editing #touch .sel { outline: 3px solid #ffcc33; box-shadow: 0 0 18px #ffcc33; }
+  body.editing::before { content: ""; position: fixed; inset: 0; background: rgba(5,10,24,.55); z-index: 4; }
+  #edittools { position: fixed; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 13; display: none; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;
+    width: min(620px, calc(100vw - 24px)); padding: 10px; border-radius: 12px; background: #0f1830; border: 2px solid #ffcc33; color: #fff; font: 14px "Trebuchet MS", sans-serif; }
+  #edittools p { margin: 0; width: 100%; text-align: center; opacity: .85; }
+  #edittools b { color: #ffcc33; min-width: 90px; text-align: center; }
+  #edittools button { padding: 8px 14px; border-radius: 8px; border: 1px solid #ffcc33; background: rgba(255,204,51,.12); color: #fff; font: inherit; cursor: pointer; }
+  #edittools button.main { background: #ffcc33; color: #1a1000; font-weight: bold; }
+  #setpanel { position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; background: rgba(5,10,24,.9); padding: 16px; overflow-y: auto; }
+  #setpanel .box { width: min(440px, 100%); background: #0f1830; border: 2px solid #ffcc33; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: #fff; }
+  #setpanel h2 { margin: 0; color: #ffcc33; }
+  #setpanel label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  #setpanel input[type=range] { width: 100%; accent-color: #ffcc33; }
+  #setpanel button { padding: 11px 14px; border-radius: 8px; border: 1px solid #ffcc33; background: rgba(255,204,51,.12); color: #fff; font: 16px "Trebuchet MS", sans-serif; cursor: pointer; }
+  #setpanel button.main { background: #ffcc33; color: #1a1000; font-weight: bold; }
+  #setpanel .note { font-size: 13px; opacity: .7; margin: 0; }
+  #hudset { position: fixed; left: 136px; bottom: 214px; z-index: 6; display: none; padding: 6px 10px; border-radius: 16px; border: 1px solid #ffcc33; background: rgba(0,0,0,.5); color: #fff; font: 14px "Trebuchet MS", sans-serif; cursor: pointer; }
+  body.playing #hudset { display: block; }
+  body.touch #hudset { left: 132px; top: 138px; bottom: auto; }
   .tbtn { position: fixed; width: 66px; height: 66px; border-radius: 50%; background: rgba(0,0,0,.4); border: 2px solid rgba(255,255,255,.5); color: #fff; font-size: 15px; text-align: center; line-height: 1.1; font-weight: bold; display: flex; align-items: center; justify-content: center; z-index: 5; }
   .tbtn.on { background: rgba(255,204,51,.6); }
+  .tbtn.big { width: 84px; height: 84px; font-size: 17px; }
+  .tbtn.gas { background: rgba(46,158,91,.55); border-color: #7dff9a; }
+  .tbtn.brake { background: rgba(180,40,40,.5); border-color: #ff8a8a; font-size: 12px; }
+  .tbtn.gas.on { background: rgba(125,255,154,.75); } .tbtn.brake.on { background: rgba(255,120,120,.75); }
+  body:not(.incar) .tbtn.car, body.incar .tbtn.foot { display: none; }
   body.touch #speed { right: auto; left: 50%; transform: translateX(-50%); bottom: 10px; text-align: center; font-size: 30px; }
   body.touch .carhp { margin: 0 auto; }
   body.touch #carname { display: none; }
@@ -151,6 +182,25 @@
 <canvas id="bigmap"></canvas>
 <div id="shop"></div>
 <button id="hudnet">🌐 Серверы</button>
+<button id="hudset">⚙ Кнопки</button>
+<div id="setpanel">
+  <div class="box">
+    <h2>Настройки управления</h2>
+    <button id="setedit" class="main">Настроить расположение кнопок</button>
+    <label>Прозрачность кнопок <input id="setopacity" type="range" min="0.3" max="1" step="0.05"></label>
+    <label>Размер всех кнопок <input id="setsize" type="range" min="0.7" max="1.5" step="0.05"></label>
+    <label>Чувствительность обзора (свайп по экрану) <input id="setlook" type="range" min="0.4" max="2.5" step="0.1"></label>
+    <button id="setreset">Сбросить всё по умолчанию</button>
+    <p class="note">Настройки сохраняются на этом устройстве.</p>
+    <button id="setclose">Закрыть</button>
+  </div>
+</div>
+<div id="edittools">
+  <p>Перетаскивайте кнопки пальцем. Нажмите на кнопку, чтобы выбрать её и изменить размер.</p>
+  <button id="editmode">Сейчас: пешком → в машине</button>
+  <button id="editminus" aria-label="Меньше">−</button><b id="editsel">—</b><button id="editplus" aria-label="Больше">+</button>
+  <button id="editreset">Вернуть места</button><button id="editdone" class="main">Готово</button>
+</div>
 <div id="netpanel">
   <div class="box">
     <h2>Серверы</h2>
@@ -173,13 +223,16 @@
 
 <div id="touch">
   <div id="joy"><div id="knob"></div></div>
-  <div class="tbtn" data-code="KeyF" style="right:20px;bottom:96px">F</div>
-  <div class="tbtn" data-code="KeyE" style="right:96px;bottom:20px">Удар</div>
-  <div class="tbtn" data-code="Space" style="right:20px;bottom:20px">⤒</div>
-  <div class="tbtn" data-code="ShiftLeft" style="right:172px;bottom:20px">Бег<br>N₂O</div>
-  <div class="tbtn" data-code="KeyQ" style="right:172px;bottom:96px">🔫</div>
-  <div class="tbtn" data-code="KeyM" style="right:20px;bottom:172px">🗺</div>
-  <div class="tbtn" data-code="KeyH" style="right:96px;bottom:96px">♪</div>
+  <!-- foot — только пешком, car — только в машине, без класса — всегда -->
+  <div class="tbtn car big gas" data-code="Gas" style="right:16px;bottom:16px">ГАЗ</div>
+  <div class="tbtn car brake" data-code="Brake" style="right:112px;bottom:16px">ТОРМОЗ</div>
+  <div class="tbtn foot" data-code="KeyE" style="right:104px;bottom:20px">Удар</div>
+  <div class="tbtn" data-code="Space" data-foot="⤒" data-car="Ручник" style="right:20px;bottom:110px">⤒</div>
+  <div class="tbtn" data-code="ShiftLeft" data-foot="Бег" data-car="N₂O" style="right:104px;bottom:104px">Бег</div>
+  <div class="tbtn foot" data-code="KeyQ" style="right:188px;bottom:104px">🔫</div>
+  <div class="tbtn" data-code="KeyF" style="right:20px;bottom:186px">F</div>
+  <div class="tbtn" data-code="KeyH" style="right:196px;bottom:20px">♪</div>
+  <div class="tbtn" data-code="KeyM" style="right:104px;bottom:186px">🗺</div>
 </div>
 
 <div id="start">
@@ -203,6 +256,7 @@
       <button id="play" class="go">ИГРАТЬ</button>
       <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
       <button id="netbtn" class="go net">СЕРВЕРЫ<small>игра по Wi-Fi</small></button>
+      <button id="setbtn" class="go set">⚙<small>кнопки</small></button>
     </div>
   </div>
 </div>

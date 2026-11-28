@@ -9,6 +9,7 @@ export class Input {
     this.joy = { x: 0, y: 0, id: null, ox: 0, oy: 0 };
     this.lookId = null; this.lookX = 0; this.lookY = 0;
     this.isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.lookSens = 1;
 
     addEventListener('keydown', (e) => {
       if (!this.keys.has(e.code)) this.justPressed.add(e.code);
@@ -31,13 +32,17 @@ export class Input {
   setupTouch() {
     document.body.classList.add('touch');
     const joy = document.getElementById('joy'), knob = document.getElementById('knob');
-    const R = 55;
+    const editing = () => document.body.classList.contains('editing');   // в настройке кнопки не нажимаются
+    let R = 55;
     joy.addEventListener('touchstart', (e) => {
+      if (editing()) return;
       const t = e.changedTouches[0]; const r = joy.getBoundingClientRect();
+      R = r.width * 0.42;                       // ход ручки зависит от размера джойстика
       this.joy.id = t.identifier; this.joy.ox = r.left + r.width / 2; this.joy.oy = r.top + r.height / 2;
       this.moveJoy(t, knob, R); e.preventDefault();
     }, { passive: false });
     joy.addEventListener('touchmove', (e) => {
+      if (editing()) return;
       for (const t of e.changedTouches) if (t.identifier === this.joy.id) this.moveJoy(t, knob, R);
       e.preventDefault();
     }, { passive: false });
@@ -51,6 +56,7 @@ export class Input {
     for (const b of document.querySelectorAll('[data-code]')) {
       const code = b.dataset.code;
       b.addEventListener('touchstart', (e) => {
+        if (editing()) return;
         if (!this.keys.has(code)) this.justPressed.add(code);
         this.keys.add(code); b.classList.add('on'); e.preventDefault();
       }, { passive: false });
@@ -66,7 +72,7 @@ export class Input {
     }, { passive: false });
     c.addEventListener('touchmove', (e) => {
       for (const t of e.changedTouches) if (t.identifier === this.lookId) {
-        this.mouseDX += (t.clientX - this.lookX) * 2; this.mouseDY += (t.clientY - this.lookY) * 2;
+        this.mouseDX += (t.clientX - this.lookX) * 2 * this.lookSens; this.mouseDY += (t.clientY - this.lookY) * 2 * this.lookSens;
         this.lookX = t.clientX; this.lookY = t.clientY;
       }
       e.preventDefault();
@@ -89,7 +95,9 @@ export class Input {
   axis() {
     const k = (c) => (this.keys.has(c) ? 1 : 0);
     const x = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft') + this.joy.x;
-    const y = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown') + this.joy.y;
+    // в машине джойстик — только руль (газ и тормоз — кнопками)
+    const jy = document.body.classList.contains('incar') ? 0 : this.joy.y;
+    const y = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown') + jy;
     return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)), run: Math.hypot(this.joy.x, this.joy.y) > 0.92 };
   }
 

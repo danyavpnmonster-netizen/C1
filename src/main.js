@@ -17,6 +17,7 @@ import { Skids } from './skids.js';
 import { TestMode } from './testmode.js';
 import { Net } from './net.js';
 import { Homes } from './homes.js';
+import { Controls } from './controls.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -78,6 +79,7 @@ class Game {
     this.test = new TestMode(this);
     this.hud = new Hud(this);
     this.net = new Net(this);
+    this.controls = new Controls(this);
     for (let k = 0; k < 16; k++) this.traffic.spawn(25, 170);
     this.initPickups();
     this.load();
@@ -495,10 +497,26 @@ class Game {
   }
 
   // ---------- игрок в машине ----------
+  // В машине на телефоне: джойстик — только руль, газ и тормоз — кнопками справа.
   playerCarControl() {
-    const a = this.input.axis();
-    const boost = this.input.down('ShiftLeft') || this.input.down('ShiftRight') || this.input.down('KeyN');
-    return { throttle: a.y, steer: a.x, handbrake: this.input.down('Space') ? 1 : 0, boost };
+    const inp = this.input, a = inp.axis();
+    const boost = inp.down('ShiftLeft') || inp.down('ShiftRight') || inp.down('KeyN');
+    let throttle = a.y;
+    if (inp.isTouch) {
+      const k = (c) => (inp.down(c) ? 1 : 0);
+      throttle = k('Gas') - k('Brake') + k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown');
+      throttle = Math.max(-1, Math.min(1, throttle));
+    }
+    return { throttle, steer: a.x, handbrake: inp.down('Space') ? 1 : 0, boost };
+  }
+
+  // Показываем нужные кнопки: пешком — удар и оружие, в машине — газ и тормоз.
+  syncTouchMode() {
+    const inCar = !!this.player.car;
+    if (inCar === this.touchInCar) return;
+    this.touchInCar = inCar;
+    document.body.classList.toggle('incar', inCar);
+    for (const b of document.querySelectorAll('.tbtn[data-foot]')) b.textContent = inCar ? b.dataset.car : b.dataset.foot;
   }
 
   sprayCheck(dt) {
@@ -647,6 +665,7 @@ class Game {
     this.updateDayNight(dt);
     this.updateCamera(dt);
     this.test.update(dt);
+    this.syncTouchMode();
     this.net.update(dt);
     this.hud.update(dt);
     const c = p.car;
