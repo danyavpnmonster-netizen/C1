@@ -19,7 +19,7 @@ export class Input {
     addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('mousedown', (e) => {
       if (this.isTouch) return;
-      if (document.pointerLockElement !== canvas) { canvas.requestPointerLock?.(); return; }
+      if (document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch (e) { /* нет */ } return; }
       if (e.button === 0) this.clicked = true;
     });
     addEventListener('mousemove', (e) => {

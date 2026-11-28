@@ -60,6 +60,15 @@
   #start .go { display: inline-flex; flex-direction: column; align-items: center; padding: 12px 28px; border: 3px solid var(--accent); border-radius: 8px; font: bold 22px "Trebuchet MS", system-ui, sans-serif; color: #fff; background: rgba(0,0,0,.35); cursor: pointer; }
   #start .go:not(.test) { animation: pulse 1.4s infinite; }
   #start .go.test { border-color: #4fc3ff; }
+  #start .go.net { border-color: #ff9a2e; }
+  #netpanel { position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; background: rgba(5,10,24,.9); padding: 16px; overflow-y: auto; }
+  #netpanel .box { width: min(460px, 100%); background: #0f1830; border: 2px solid #ff9a2e; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  #netpanel h2 { margin: 0; color: #ff9a2e; font-size: 22px; }
+  #netpanel p { margin: 0; line-height: 1.45; }
+  #netpanel button { padding: 11px 14px; border-radius: 8px; border: 1px solid #ff9a2e; background: rgba(255,154,46,.12); color: #fff; font: 16px "Trebuchet MS", system-ui, sans-serif; cursor: pointer; text-align: left; }
+  #netpanel button:disabled { opacity: .4; }
+  #netpanel button.main { background: #ff9a2e; color: #1a1000; font-weight: bold; text-align: center; }
+  #netlist { display: flex; flex-direction: column; gap: 8px; }
   #start .go small { font-size: 12px; font-weight: normal; opacity: .8; }
   #start .go:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   #testpanel { position: fixed; top: 60px; left: 16px; display: none; z-index: 6; max-width: calc(100vw - 32px); }
@@ -79,6 +88,13 @@
   #start td:first-child { color: var(--accent); font-weight: bold; white-space: nowrap; }
   body.touch #start table { display: none; }
   @keyframes pulse { 50% { transform: scale(1.06); } }
+  @media (max-height: 520px) {
+    #start h1 { font-size: 40px; }
+    #start p { font-size: 13px; margin: 8px 0; }
+    #start .legend { display: none; }
+    #start .gos { flex-wrap: nowrap; gap: 10px; margin-top: 8px; }
+    #start .go { padding: 8px 16px; font-size: 18px; }
+  }
 
   #touch { display: none; }
   body.touch #touch { display: block; }
@@ -116,6 +132,15 @@
 <canvas id="minimap" width="190" height="190"></canvas>
 <canvas id="bigmap"></canvas>
 <div id="shop"></div>
+<div id="netpanel">
+  <div class="box">
+    <h2>Игра вдвоём по Bluetooth</h2>
+    <p id="netstatus">Один игрок нажимает «Создать игру», второй — выбирает его телефон в списке.</p>
+    <button id="nethost" class="main">Создать игру</button>
+    <div id="netlist"></div>
+    <button id="netback">Назад</button>
+  </div>
+</div>
 <div id="testpanel"><pre id="tele"></pre><div id="testbtns"></div></div>
 <div id="mission" class="hud"></div>
 <div id="timer" class="hud"></div>
@@ -152,11 +177,12 @@
       <tr><td>Shift</td><td>бег; в машине — нитро</td></tr>
       <tr><td>M / H</td><td>большая карта / сигнал</td></tr>
     </table>
-    <p>На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!), жёлтые кольца у дверей — входы в магазины,
+    <p class="legend">На карте: <b style="color:#ffcc00">К</b> курьер, <b style="color:#33aaff">Т</b> такси, <b style="color:#ff4466">Г</b> гонка, <b style="color:#aa55ff">У</b> угон на заказ, зелёная зона — район банды (опасно!), жёлтые кольца у дверей — входы в магазины,
       <b style="color:#3dff8a">$</b> покраска (сброс розыска).</p>
     <div class="gos">
       <button id="play" class="go">ИГРАТЬ</button>
       <button id="testbtn" class="go test">ТЕСТ-РЕЖИМ<small>физика машин, без полиции</small></button>
+      <button id="netbtn" class="go net">ВДВОЁМ<small>по Bluetooth</small></button>
     </div>
   </div>
 </div>

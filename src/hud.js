@@ -173,6 +173,8 @@ export class Hud {
       label(gv.pos.x, gv.pos.z, '#' + gv.color.toString(16).padStart(6, '0'), gv.name[0]);
     }
     const flash = Math.floor(g.time * 6) % 2;
+    const rt = g.net && g.net.remoteTarget();
+    if (rt) { dot(rt.x, rt.z, '#ff9a2e', 6); dot(rt.x, rt.z, '#fff', 2.5); }
     for (const car of g.cars) if (car.role === 'police' && !car.wrecked) dot(car.pos.x, car.pos.z, flash ? '#ff3030' : '#3060ff', 4);
     c.restore();
     // цель миссии (прижимается к краю)

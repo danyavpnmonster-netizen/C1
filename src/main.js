@@ -15,6 +15,7 @@ import { Weather } from './weather.js';
 import { Shops } from './shops.js';
 import { Skids } from './skids.js';
 import { TestMode } from './testmode.js';
+import { Net } from './net.js';
 
 const HEAT = [0, 1, 4, 9, 16, 26];
 const NO_CTL = { throttle: 0, steer: 0, handbrake: 1 };
@@ -73,6 +74,7 @@ class Game {
     this.skids = new Skids(this.scene);
     this.test = new TestMode(this);
     this.hud = new Hud(this);
+    this.net = new Net(this);
     for (let k = 0; k < 16; k++) this.traffic.spawn(25, 170);
     this.initPickups();
     this.load();
@@ -91,7 +93,7 @@ class Game {
   begin(test) {
     document.getElementById('start').style.display = 'none';
     this.sfx.init();
-    if (!this.input.isTouch) this.renderer.domElement.requestPointerLock?.();
+    if (!this.input.isTouch) { try { this.renderer.domElement.requestPointerLock?.()?.catch?.(() => {}); } catch (e) { /* курсор не захвачен — не страшно */ } }
     if (this.state === 'menu') {
       this.state = 'play';
       if (test) this.test.enable();
@@ -207,7 +209,7 @@ class Game {
     if (p.car) { this.exitCar(p.car.wrecked); return; }
     let best = null, bd = 4.2;
     for (const c of this.cars) {
-      if (c.wrecked) continue;
+      if (c.wrecked || c.role === 'remote') continue;
       const d = Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
       if (d < bd) { bd = d; best = c; }
     }
@@ -359,6 +361,15 @@ class Game {
       }
     }
     // машины и пешеходы
+    const rt = this.net.remoteTarget();
+    this.netHitCd = Math.max(0, (this.netHitCd || 0) - 1 / 60);
+    if (rt && !rt.inCar && p.car && this.netHitCd <= 0) {
+      const s = Math.abs(p.car.speed), f = p.car.forward(), sg = Math.sign(p.car.speed);
+      if (s > 5 && Math.hypot(rt.x - p.car.pos.x, rt.z - p.car.pos.z) < p.car.T.l * 0.5) {
+        this.net.hitRemote(s * 1.6, f.x * s * sg * 0.8, f.z * s * sg * 0.8);
+        this.netHitCd = 1; this.sfx.hit(0.6);
+      }
+    }
     for (const c of cars) {
       const s = Math.abs(c.speed);
       if (s < 0.8) continue;
@@ -411,6 +422,11 @@ class Game {
       if (t < 0.3 || t > bt) continue;
       if (Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = o; kind = 'cop'; }
     }
+    const rt = this.net.remoteTarget();
+    if (rt && !rt.inCar) {
+      const rx = rt.x - x, rz = rt.z - z, t = rx * dx + rz * dz;
+      if (t > 0.3 && t < bt && Math.abs(rx * dz - rz * dx) < 0.6) { bt = t; best = rt; kind = 'net'; }
+    }
     for (const c of this.cars) {
       if (c === this.player.car) continue;
       const rx = c.pos.x - x, rz = c.pos.z - z, t = rx * dx + rz * dz;
@@ -422,9 +438,11 @@ class Game {
     }
     this.tracer(x + dx * 0.8, y, z + dz * 0.8, x + dx * bt, z + dz * bt);
     if (kind === 'ped') { this.peds.shot(best, dx, dz); this.crime(3); }
+    else if (kind === 'net') { this.net.hitRemote(12); this.sfx.hit(0.3); }
+    else if (kind === 'car' && best.role === 'remote') { this.net.hitRemote(14); this.sfx.hit(0.2); }
     else if (kind === 'cop') { this.police.hitOfficer(best, 1, dx, dz); this.sfx.hit(0.3); }
     else if (kind === 'gang') { this.gangs.hit(best, 1, dx, dz); this.sfx.hit(0.3); }
-    else if (kind === 'car') {
+    else if (kind === 'car' && best.role !== 'remote') {
       best.damage(14);
       this.sfx.hit(0.2);
       this.crime(best.role === 'police' ? 3 : 0.5);
@@ -577,6 +595,7 @@ class Game {
     p.update(dt);
     const ctlPlayer = this.state === 'play' ? this.playerCarControl() : NO_CTL;
     for (const car of this.cars) {
+      if (car.role === 'remote') continue;   // машину второго игрока двигает сеть
       let ctl = NO_CTL;
       if (car === p.car) ctl = ctlPlayer;
       else if (car.role === 'traffic' && car.ai) ctl = trafficControl(car, dt, this);
@@ -608,6 +627,7 @@ class Game {
     this.updateDayNight(dt);
     this.updateCamera(dt);
     this.test.update(dt);
+    this.net.update(dt);
     this.hud.update(dt);
     const c = p.car;
     const sirenLvl = this.wanted > 0 ? clamp(1 - this.police.nearest / 120, 0, 1) : 0;

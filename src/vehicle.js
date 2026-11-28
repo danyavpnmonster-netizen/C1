@@ -331,6 +331,18 @@ export class Car {
     }
   }
 
+  // Машина второго игрока: положение приходит по сети, своей физики нет.
+  setRemote(x, y, z, heading, vx, vz, steer, dt) {
+    this.pos.set(x, y, z); this.heading = heading;
+    this.vel.x = vx; this.vel.z = vz; this.yawRate = 0; this.steer = steer;
+    this.health = 100; this.wrecked = false;
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.set(0, heading, 0);
+    const s = this.speed;
+    for (const w of this.wheels) w.rotation.x += s * dt / 0.36;
+    for (const p of this.frontPivots) p.rotation.y = -steer * 0.6 / (1 + Math.abs(s) / 9);
+  }
+
   dispose() {
     this.scene.remove(this.mesh);
     this.bodyMat.dispose();
