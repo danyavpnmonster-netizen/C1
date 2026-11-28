@@ -13,7 +13,7 @@ const GUN = new THREE.BoxGeometry(0.07, 0.3, 0.12);
 class Officer {
   constructor(scene, car, x, z) {
     this.mesh = makeHuman(0x1d2f5a, 0x12182a, [0xf1c27d, 0xc68642, 0x8d5524, 0xe0ac69][randInt(0, 3)], 0x1a1209,
-      { sleeves: 'long', female: Math.random() < 0.25, height: rnd(0.97, 1.05) });
+      { sleeves: 'long', female: Math.random() < 0.25, height: rnd(0.97, 1.05), hairStyle: 'buzz' });
     const cap = new THREE.Mesh(CAP, mat(0x111a33)); cap.position.y = 1.79;
     const brim = new THREE.Mesh(BRIM, mat(0x111a33)); brim.position.set(0, 1.755, 0.15);
     const gun = new THREE.Mesh(GUN, mat(0x111111)); gun.position.set(0, -0.38, 0.03);

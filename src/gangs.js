@@ -9,7 +9,7 @@ const GANG_COLOR = 0x1f9e4a;
 class Member {
   constructor(scene, home) {
     this.mesh = makeHuman(GANG_COLOR, 0x151515, [0x8d5524, 0xc68642, 0x6b4226][randInt(0, 2)], 0x111111,
-      { build: rnd(1.0, 1.15), height: rnd(0.97, 1.06), shoe: 0xf0f0f0 });
+      { build: rnd(1.0, 1.15), height: rnd(0.97, 1.06), shoe: 0xf0f0f0, hairStyle: 'buzz', sleeves: 'short' });
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.055, 0.265), mat(GANG_COLOR));
     band.position.y = 1.735;
     this.mesh.userData.body.add(band);

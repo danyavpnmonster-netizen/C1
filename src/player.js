@@ -5,7 +5,8 @@ import { lerpAngle } from './config.js';
 export class Player {
   constructor(game) {
     this.game = game;
-    this.mesh = makeHuman(0xf5f5f5, 0x2b4a8a, 0x8d5a3b);
+    // герой: белая футболка, джинсы, короткая стрижка, белые кроссовки
+    this.mesh = makeHuman(0xf5f5f5, 0x2b4a8a, 0x8d5a3b, 0x14100a, { hairStyle: 'buzz', shoe: 0xf2f2f2, build: 1.06, height: 1.02 });
     game.scene.add(this.mesh);
     this.pos = new THREE.Vector3();
     this.vy = 0; this.facing = 0; this.phase = 0;
